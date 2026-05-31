@@ -3,5 +3,9 @@
   "buildCommand": "npm run build -w @ledgent/contracts && npm run build -w @ledgent/web",
   "installCommand": "npm install",
   "outputDirectory": "apps/web/dist",
-  "framework": "vite"
+  "framework": "vite",
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
+  ]
 }
