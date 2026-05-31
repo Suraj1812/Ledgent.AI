@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { loginSchema, type LoginInput } from "@ledgent/contracts";
 import { useState } from "react";
 import { api } from "../services/api";
+import { notify } from "../utils/notify";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -50,6 +51,7 @@ export function LoginPage() {
               setError(null);
               try {
                 await api.login(values);
+                notify("Welcome back.");
                 navigate("/");
               } catch (loginError) {
                 setError(loginError instanceof Error ? loginError.message : "Sign in failed");

@@ -51,6 +51,8 @@ export type Invoice = {
   extractionScore: number;
   matchScore: number;
   exceptionSummary?: string;
+  createdAt?: string;
+  updatedAt?: string;
   lineItems?: Array<{
     id: string;
     description: string;
@@ -59,6 +61,40 @@ export type Invoice = {
     taxAmount: number;
     totalAmount: number;
     confidence?: number;
+  }>;
+  documents?: Array<{
+    id: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdAt: string;
+  }>;
+  approvalTasks?: Array<{
+    id: string;
+    status: string;
+    dueAt?: string;
+    completedAt?: string;
+    approverName?: string;
+    stepName?: string;
+  }>;
+  aiLogs?: Array<{
+    id: string;
+    agentName: string;
+    model: string;
+    confidence: number;
+    createdAt: string;
+  }>;
+  journalEntries?: Array<{
+    id: string;
+    status: string;
+    erpSystem: string;
+    postedAt?: string;
+    createdAt: string;
+  }>;
+  comments?: Array<{
+    id: string;
+    body: string;
+    createdAt: string;
   }>;
 };
 

@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  LinearProgress,
   MenuItem,
   Stack,
   Table,
@@ -31,6 +30,8 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -40,7 +41,7 @@ export function VendorsPage() {
   const { data } = useQuery({ queryKey: ["vendors"], queryFn: api.vendors });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const filtered = data.filter((vendor) => vendor.name.toLowerCase().includes(search.toLowerCase()));
@@ -177,6 +178,7 @@ function VendorDialog({ open, onClose }: { open: boolean; onClose: () => void })
     mutationFn: api.createVendor,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["vendors"] });
+      notify("Vendor created successfully.");
       onClose();
     }
   });

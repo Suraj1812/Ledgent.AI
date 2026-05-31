@@ -1,7 +1,9 @@
 import { Body, Controller, Param, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { copilotQuestionSchema } from "@ledgent/contracts";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Permissions } from "../../common/decorators/permissions.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { AiService } from "./ai.service";
 
 @ApiTags("ai")
@@ -18,7 +20,7 @@ export class AiController {
 
   @Permissions("dashboard:read")
   @Post("copilot")
-  askCopilot(@CurrentUser() user: AuthenticatedUser, @Body("question") question: string) {
-    return this.ai.askCopilot(user.organizationId, question);
+  askCopilot(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(copilotQuestionSchema)) body: unknown) {
+    return this.ai.askCopilot(user.organizationId, (body as { question: string }).question);
   }
 }

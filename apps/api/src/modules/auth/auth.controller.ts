@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Ip, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { loginSchema } from "@ledgent/contracts";
+import { Throttle } from "@nestjs/throttler";
+import { forgotPasswordSchema, loginSchema, refreshTokenSchema } from "@ledgent/contracts";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -12,6 +13,7 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
   @Post("login")
   login(
     @Body(new ZodValidationPipe(loginSchema)) body: unknown,
@@ -22,15 +24,17 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post("refresh")
-  refresh(@Body("refreshToken") refreshToken: string) {
-    return this.auth.refresh(refreshToken);
+  refresh(@Body(new ZodValidationPipe(refreshTokenSchema)) body: unknown) {
+    return this.auth.refresh((body as { refreshToken: string }).refreshToken);
   }
 
   @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post("forgot-password")
-  forgotPassword(@Body("email") email: string) {
-    return this.auth.requestPasswordReset(email);
+  forgotPassword(@Body(new ZodValidationPipe(forgotPasswordSchema)) body: unknown) {
+    return this.auth.requestPasswordReset((body as { email: string }).email);
   }
 
   @ApiBearerAuth()

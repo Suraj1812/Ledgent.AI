@@ -17,11 +17,13 @@ import {
 } from "@mui/material";
 import ApprovalOutlinedIcon from "@mui/icons-material/ApprovalOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -29,22 +31,24 @@ import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../store";
-import { setSidebarOpen } from "../store/app-slice";
+import { setSidebarOpen, showToast, toggleThemeMode } from "../store/app-slice";
 import { api, getCurrentUser } from "../services/api";
+import { rolePermissions, type Permission } from "@ledgent/contracts";
+import { NotificationsMenu } from "../components/NotificationsMenu";
 
 const drawerWidth = 272;
 
 const navItems = [
-  { label: "Dashboard", path: "/", icon: <DashboardOutlinedIcon /> },
-  { label: "Vendors", path: "/vendors", icon: <StorefrontOutlinedIcon /> },
-  { label: "Purchase Orders", path: "/purchase-orders", icon: <ReceiptLongOutlinedIcon /> },
-  { label: "Invoices", path: "/invoices", icon: <DescriptionOutlinedIcon /> },
-  { label: "Approvals", path: "/approvals", icon: <ApprovalOutlinedIcon /> },
-  { label: "Workflows", path: "/workflows", icon: <HubOutlinedIcon /> },
-  { label: "Audit Logs", path: "/audit-logs", icon: <HistoryOutlinedIcon /> },
-  { label: "Reports", path: "/reports", icon: <AssessmentOutlinedIcon /> },
-  { label: "Users", path: "/users", icon: <PeopleAltOutlinedIcon /> },
-  { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon /> }
+  { label: "Dashboard", path: "/", icon: <DashboardOutlinedIcon />, permission: "dashboard:read" },
+  { label: "Vendors", path: "/vendors", icon: <StorefrontOutlinedIcon />, permission: "vendors:manage" },
+  { label: "Purchase Orders", path: "/purchase-orders", icon: <ReceiptLongOutlinedIcon />, permission: "purchase_orders:manage" },
+  { label: "Invoices", path: "/invoices", icon: <DescriptionOutlinedIcon />, permission: "invoices:review" },
+  { label: "Approvals", path: "/approvals", icon: <ApprovalOutlinedIcon />, permission: "invoices:approve" },
+  { label: "Workflows", path: "/workflows", icon: <HubOutlinedIcon />, permission: "workflows:manage" },
+  { label: "Audit Logs", path: "/audit-logs", icon: <HistoryOutlinedIcon />, permission: "audit:read" },
+  { label: "Reports", path: "/reports", icon: <AssessmentOutlinedIcon />, permission: "reports:read" },
+  { label: "Users", path: "/users", icon: <PeopleAltOutlinedIcon />, permission: "users:manage" },
+  { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon />, permission: "settings:manage" }
 ];
 
 export function AppShell() {
@@ -53,8 +57,14 @@ export function AppShell() {
   const dispatch = useDispatch();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const sidebarOpen = useSelector((state: RootState) => state.app.sidebarOpen);
+  const themeMode = useSelector((state: RootState) => state.app.themeMode);
   const currentUser = getCurrentUser();
   const initials = `${currentUser?.firstName?.[0] ?? "L"}${currentUser?.lastName?.[0] ?? "A"}`;
+  const grantedPermissions = new Set([
+    ...(currentUser ? rolePermissions[currentUser.role] : []),
+    ...(currentUser?.permissions ?? [])
+  ]);
+  const visibleNavItems = navItems.filter((item) => grantedPermissions.has(item.permission as Permission));
 
   const drawer = (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -75,7 +85,7 @@ export function AppShell() {
       </Stack>
       <Divider />
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const selected = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path);
 
           return (
@@ -112,6 +122,24 @@ export function AppShell() {
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: "fixed",
+          top: -48,
+          left: 12,
+          zIndex: 1600,
+          bgcolor: "background.paper",
+          color: "text.primary",
+          px: 2,
+          py: 1,
+          borderRadius: 1,
+          "&:focus": { top: 12 }
+        }}
+      >
+        Skip to content
+      </Box>
       <Drawer
         variant={isDesktop ? "permanent" : "temporary"}
         open={isDesktop || sidebarOpen}
@@ -144,11 +172,18 @@ export function AppShell() {
               </IconButton>
             ) : null}
             <Box sx={{ flex: 1 }} />
+            <Tooltip title={themeMode === "light" ? "Use dark mode" : "Use light mode"}>
+              <IconButton onClick={() => dispatch(toggleThemeMode())} aria-label={themeMode === "light" ? "Use dark mode" : "Use light mode"}>
+                {themeMode === "light" ? <DarkModeOutlinedIcon /> : <LightModeOutlinedIcon />}
+              </IconButton>
+            </Tooltip>
+            <NotificationsMenu />
             <Tooltip title="Sign out">
               <IconButton
                 aria-label="Sign out"
                 onClick={async () => {
                   await api.logout();
+                  dispatch(showToast({ message: "Signed out successfully.", severity: "success" }));
                   navigate("/login", { replace: true });
                 }}
               >
@@ -159,7 +194,7 @@ export function AppShell() {
             </Tooltip>
           </Toolbar>
         </AppBar>
-        <Box component="main" sx={{ p: { xs: 2, md: 3 }, maxWidth: 1600, mx: "auto" }}>
+        <Box id="main-content" component="main" sx={{ p: { xs: 2, md: 3 }, maxWidth: 1600, mx: "auto" }}>
           <Outlet />
         </Box>
       </Box>

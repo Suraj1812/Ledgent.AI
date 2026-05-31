@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   CardContent,
-  LinearProgress,
   Stack,
   Typography
 } from "@mui/material";
@@ -15,6 +14,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -30,11 +31,12 @@ export function ApprovalCenterPage() {
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] })
       ]);
+      notify("Approval decision saved.");
     }
   });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   return (

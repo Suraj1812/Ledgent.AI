@@ -31,10 +31,13 @@ export class AiService {
 
     await this.prisma.invoice.update({ where: { id: invoice.id }, data: { status: "EXTRACTING" } });
 
+    const organization = await this.prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
+    const settings = organization.settings as { matchingTolerancePercent?: number };
+    const tolerancePercent = settings.matchingTolerancePercent ?? 2;
     const extraction = await this.extractFields(invoice);
-    const match = this.matchInvoice(invoice);
+    const match = this.matchInvoice(invoice, tolerancePercent);
     const exceptions = this.detectExceptions(invoice, match);
-    const status = exceptions.length ? "EXCEPTION" : "PENDING_APPROVAL";
+    const status = exceptions.length ? "EXCEPTION" : "AP_REVIEW";
 
     await this.prisma.$transaction([
       this.prisma.aiProcessingLog.create({
@@ -42,7 +45,7 @@ export class AiService {
           organizationId,
           invoiceId,
           agentName: "invoice-extraction-agent",
-          model: this.config.get<string>("OPENAI_MODEL", "gpt-4.1-mini"),
+          model: "validated-input-v1",
           confidence: extraction.confidence,
           result: extraction
         }
@@ -63,7 +66,7 @@ export class AiService {
           invoiceId,
           agentName: "exception-detection-agent",
           model: "deterministic-policy-v1",
-          confidence: exceptions.length ? 0.91 : 0.98,
+          confidence: exceptions.length ? Math.max(0.5, 1 - exceptions.length * 0.12) : 1,
           result: { exceptions }
         }
       }),
@@ -145,24 +148,40 @@ export class AiService {
   }
 
   private async extractFields(invoice: InvoiceProcessingRecord) {
+    const fields = [
+      invoice.invoiceNumber,
+      invoice.vendor?.name,
+      invoice.invoiceDate,
+      invoice.dueDate,
+      invoice.currency,
+      invoice.totalAmount
+    ];
+    const completeness = fields.filter(Boolean).length / fields.length;
+    const lineItemConfidence = invoice.lineItems.length
+      ? invoice.lineItems.reduce((sum: number, line: InvoiceProcessingRecord) => sum + Number(line.confidence ?? 1), 0) /
+        invoice.lineItems.length
+      : 0;
+    const confidence = Number(((completeness + lineItemConfidence) / 2).toFixed(4));
+
     return {
-      invoiceNumber: { value: invoice.invoiceNumber, confidence: 0.98 },
-      vendorName: { value: invoice.vendor.name, confidence: 0.96 },
-      invoiceDate: { value: invoice.invoiceDate, confidence: 0.94 },
-      dueDate: { value: invoice.dueDate, confidence: 0.93 },
-      currency: { value: invoice.currency, confidence: 0.99 },
-      totalAmount: { value: invoice.totalAmount, confidence: 0.95 },
+      source: "validated-input",
+      invoiceNumber: invoice.invoiceNumber,
+      vendorName: invoice.vendor.name,
+      invoiceDate: invoice.invoiceDate,
+      dueDate: invoice.dueDate,
+      currency: invoice.currency,
+      totalAmount: invoice.totalAmount,
       lineItems: invoice.lineItems.map((line: InvoiceProcessingRecord) => ({
         description: line.description,
         quantity: line.quantity,
         totalAmount: line.totalAmount,
-        confidence: line.confidence ?? 0.9
+        confidence: Number(line.confidence ?? 1)
       })),
-      confidence: 0.94
+      confidence
     };
   }
 
-  private matchInvoice(invoice: InvoiceProcessingRecord) {
+  private matchInvoice(invoice: InvoiceProcessingRecord, tolerancePercent: number) {
     if (!invoice.purchaseOrder) {
       return { type: "missing-po", score: 0.15, amountVariance: null, withinTolerance: false };
     }
@@ -170,7 +189,7 @@ export class AiService {
     const invoiceTotal = Number(invoice.totalAmount);
     const poTotal = Number(invoice.purchaseOrder.totalAmount);
     const amountVariance = invoiceTotal - poTotal;
-    const tolerance = poTotal * 0.02;
+    const tolerance = poTotal * (tolerancePercent / 100);
     const withinTolerance = Math.abs(amountVariance) <= tolerance;
 
     return {

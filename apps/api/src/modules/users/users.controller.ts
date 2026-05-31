@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { userSchema, userStatusSchema } from "@ledgent/contracts";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Permissions } from "../../common/decorators/permissions.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { UsersService } from "./users.service";
 
 @ApiTags("users")
@@ -18,8 +20,8 @@ export class UsersController {
 
   @Permissions("users:manage")
   @Post()
-  create(@CurrentUser() user: AuthenticatedUser, @Body() body: Parameters<UsersService["create"]>[1]) {
-    return this.users.create(user.organizationId, body);
+  create(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(userSchema)) body: unknown) {
+    return this.users.create(user.organizationId, user.sub, body as never);
   }
 
   @Permissions("users:manage")
@@ -27,8 +29,8 @@ export class UsersController {
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
-    @Body("isActive") isActive: boolean
+    @Body(new ZodValidationPipe(userStatusSchema)) body: unknown
   ) {
-    return this.users.updateStatus(user.organizationId, id, isActive);
+    return this.users.updateStatus(user.organizationId, user.sub, id, (body as { isActive: boolean }).isActive);
   }
 }

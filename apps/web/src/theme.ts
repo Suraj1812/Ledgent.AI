@@ -1,17 +1,21 @@
-import { createTheme } from "@mui/material/styles";
+import { alpha, createTheme } from "@mui/material/styles";
+import type { ThemeMode } from "./store/app-slice";
 
-export const theme = createTheme({
+export function createAppTheme(mode: ThemeMode) {
+  const isDark = mode === "dark";
+
+  return createTheme({
   palette: {
-    mode: "light",
+    mode,
     primary: {
-      main: "#3b342b",
-      dark: "#211c17",
-      light: "#655a4c"
+      main: isDark ? "#e7c68b" : "#3b342b",
+      dark: isDark ? "#c99d5c" : "#211c17",
+      light: isDark ? "#f2ddb8" : "#655a4c"
     },
     secondary: {
-      main: "#e7c68b",
-      dark: "#c99d5c",
-      light: "#f2ddb8"
+      main: isDark ? "#87c8bb" : "#d5a858",
+      dark: isDark ? "#5da899" : "#b7791f",
+      light: isDark ? "#b4e0d7" : "#edd3a4"
     },
     success: {
       main: "#20825c"
@@ -23,14 +27,14 @@ export const theme = createTheme({
       main: "#c2413b"
     },
     background: {
-      default: "#f6f7fb",
-      paper: "#ffffff"
+      default: isDark ? "#171a1d" : "#f6f7fb",
+      paper: isDark ? "#22272b" : "#ffffff"
     },
     text: {
-      primary: "#211c17",
-      secondary: "#6d6255"
+      primary: isDark ? "#f5eee2" : "#211c17",
+      secondary: isDark ? "#bdc5c7" : "#6d6255"
     },
-    divider: "#eadcc7"
+    divider: isDark ? "#3d464b" : "#eadcc7"
   },
   shape: {
     borderRadius: 8
@@ -49,9 +53,21 @@ export const theme = createTheme({
   components: {
     MuiCard: {
       styleOverrides: {
-        root: {
-          border: "1px solid #eadcc7",
-          boxShadow: "0 10px 30px rgba(59, 52, 43, 0.08)"
+        root: ({ theme }) => ({
+          border: `1px solid ${theme.palette.divider}`,
+          boxShadow: isDark ? "0 10px 30px rgba(0, 0, 0, 0.2)" : "0 10px 30px rgba(59, 52, 43, 0.08)",
+          transition: "border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease"
+        })
+      }
+    },
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          transition: "background-color 180ms ease, color 180ms ease"
+        },
+        "*:focus-visible": {
+          outline: `3px solid ${alpha(isDark ? "#e7c68b" : "#3b342b", 0.55)}`,
+          outlineOffset: 2
         }
       }
     },
@@ -68,4 +84,5 @@ export const theme = createTheme({
       }
     }
   }
-});
+  });
+}

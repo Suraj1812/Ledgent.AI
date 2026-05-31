@@ -3,10 +3,11 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
+import { Logger as PinoLogger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: false });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, cors: false });
   const config = app.get(ConfigService);
   const appUrls = config
     .getOrThrow<string>("APP_URL")
@@ -14,6 +15,8 @@ async function bootstrap() {
     .map((url) => url.trim())
     .filter(Boolean);
 
+  app.useLogger(app.get(PinoLogger));
+  app.getHttpAdapter().getInstance().set("trust proxy", 1);
   app.use(helmet());
   app.enableCors({
     origin: [...appUrls, "http://localhost:5173", "http://localhost:5174"],

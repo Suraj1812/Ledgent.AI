@@ -10,7 +10,13 @@ function setMeta(selector: string, attribute: "content" | "href", value: string)
 }
 
 export function MetaManager() {
-  const { data } = useQuery({ queryKey: ["meta"], queryFn: api.meta, retry: false });
+  const { data } = useQuery({
+    queryKey: ["meta"],
+    queryFn: api.meta,
+    retry: false,
+    throwOnError: false,
+    meta: { silent: true }
+  });
 
   useEffect(() => {
     if (!data) return;

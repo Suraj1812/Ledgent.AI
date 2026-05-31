@@ -1,7 +1,9 @@
 import { Body, Controller, Get, Patch } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { organizationSettingsSchema } from "@ledgent/contracts";
 import { Permissions } from "../../common/decorators/permissions.decorator";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { OrganizationsService } from "./organizations.service";
 
 @ApiTags("organizations")
@@ -18,7 +20,7 @@ export class OrganizationsController {
 
   @Permissions("settings:manage")
   @Patch("settings")
-  updateSettings(@CurrentUser() user: AuthenticatedUser, @Body() body: Record<string, unknown>) {
-    return this.organizations.updateSettings(user.organizationId, body);
+  updateSettings(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(organizationSettingsSchema)) body: unknown) {
+    return this.organizations.updateSettings(user.organizationId, user.sub, body as never);
   }
 }

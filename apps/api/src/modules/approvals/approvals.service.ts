@@ -62,7 +62,7 @@ export class ApprovalsService {
     });
   }
 
-  async routeInvoice(organizationId: string, invoiceId: string) {
+  async routeInvoice(organizationId: string, userId: string, invoiceId: string) {
     const invoice = await this.prisma.invoice.findFirstOrThrow({
       where: { id: invoiceId, organizationId, deletedAt: null },
       include: { vendor: true }
@@ -78,9 +78,18 @@ export class ApprovalsService {
       throw new BadRequestException("No active approval workflow is configured");
     }
 
-    const createdTasks = [];
+    const existingTasks = await this.prisma.approvalTask.count({
+      where: { invoiceId: invoice.id, status: "PENDING" }
+    });
 
-    for (const step of workflow.steps) {
+    if (existingTasks) {
+      throw new BadRequestException("This invoice is already routed for approval");
+    }
+
+    const eligibleSteps = workflow.steps.filter((step) => Number(invoice.totalAmount) >= Number(step.thresholdAmount));
+    const assignments = [];
+
+    for (const step of eligibleSteps) {
       const approver = await this.prisma.user.findFirst({
         where: {
           organizationId,
@@ -95,23 +104,52 @@ export class ApprovalsService {
         continue;
       }
 
-      const task = await this.prisma.approvalTask.create({
-        data: {
-          invoiceId: invoice.id,
-          workflowStepId: step.id,
-          assignedToId: approver.id,
-          dueAt: new Date(Date.now() + step.escalationHours * 60 * 60 * 1000)
-        }
-      });
-      createdTasks.push(task);
+      assignments.push({ step, approver });
     }
 
-    await this.prisma.invoice.update({
-      where: { id: invoice.id },
-      data: { status: createdTasks.length ? "PENDING_APPROVAL" : "AP_REVIEW" }
-    });
+    if (!assignments.length) {
+      throw new BadRequestException("No active approver is available for the configured workflow");
+    }
 
-    return { invoiceId, tasksCreated: createdTasks.length };
+    await this.prisma.$transaction([
+      ...assignments.map(({ step, approver }) =>
+        this.prisma.approvalTask.create({
+          data: {
+            invoiceId: invoice.id,
+            workflowStepId: step.id,
+            assignedToId: approver.id,
+            dueAt: new Date(Date.now() + step.escalationHours * 60 * 60 * 1000)
+          }
+        })
+      ),
+      ...assignments.map(({ step, approver }) =>
+        this.prisma.notification.create({
+          data: {
+            organizationId,
+            userId: approver.id,
+            channel: "IN_APP",
+            title: "Invoice approval assigned",
+            body: `${invoice.invoiceNumber} requires ${step.name.toLowerCase()}.`
+          }
+        })
+      ),
+      this.prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { status: "PENDING_APPROVAL" }
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          organizationId,
+          userId,
+          action: "INVOICE_ROUTED_FOR_APPROVAL",
+          entityType: "Invoice",
+          entityId: invoice.id,
+          after: { tasksCreated: assignments.length, workflowId: workflow.id }
+        }
+      })
+    ]);
+
+    return { invoiceId, tasksCreated: assignments.length };
   }
 
   async decide(organizationId: string, taskId: string, userId: string, input: ApprovalDecisionInput) {

@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   CardContent,
-  LinearProgress,
   Stack,
   Table,
   TableBody,
@@ -19,6 +18,7 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
 
 export function AuditLogsPage() {
   const [action, setAction] = useState("");
@@ -27,7 +27,7 @@ export function AuditLogsPage() {
   const { data } = useQuery({ queryKey: ["audit-events"], queryFn: api.auditEvents });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const filtered = data.filter((event) =>

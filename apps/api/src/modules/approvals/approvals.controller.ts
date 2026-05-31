@@ -33,7 +33,7 @@ export class ApprovalsController {
   @Permissions("invoices:review")
   @Post("route/:invoiceId")
   routeInvoice(@CurrentUser() user: AuthenticatedUser, @Param("invoiceId") invoiceId: string) {
-    return this.approvals.routeInvoice(user.organizationId, invoiceId);
+    return this.approvals.routeInvoice(user.organizationId, user.sub, invoiceId);
   }
 
   @Permissions("invoices:approve")

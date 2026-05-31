@@ -114,6 +114,14 @@ export const loginSchema = z.object({
   mfaCode: z.string().trim().min(6).max(8).optional()
 });
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(32)
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
 export const vendorSchema = z.object({
   name: z.string().trim().min(2),
   legalName: z.string().trim().optional(),
@@ -173,6 +181,15 @@ export const approvalDecisionSchema = z.object({
   comment: z.string().trim().max(2000).optional()
 });
 
+export const invoiceTransitionSchema = z.object({
+  status: z.enum(invoiceStatuses),
+  reason: z.string().trim().max(2000).optional()
+});
+
+export const commentSchema = z.object({
+  body: z.string().trim().min(1).max(2000)
+});
+
 export const workflowRuleSchema = z.object({
   name: z.string().trim().min(3),
   thresholdAmount: z.coerce.number().nonnegative().default(0),
@@ -182,9 +199,53 @@ export const workflowRuleSchema = z.object({
   escalationHours: z.coerce.number().positive().default(24)
 });
 
+export const userSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().min(1).max(80),
+  role: z.enum(roles),
+  permissions: z.array(z.enum(permissions)).default([]),
+  password: z.string().min(12).max(128)
+});
+
+export const userStatusSchema = z.object({
+  isActive: z.boolean()
+});
+
+export const organizationSettingsSchema = z.object({
+  matchingTolerancePercent: z.coerce.number().min(0).max(100),
+  quantityTolerancePercent: z.coerce.number().min(0).max(100),
+  currencyPolicy: z.enum(["block", "review"]),
+  duplicateDetectionEnabled: z.boolean(),
+  requirePoAboveThreshold: z.boolean(),
+  mfaRequiredForFinanceAdmins: z.boolean(),
+  notifyApproversBeforeSlaBreach: z.boolean(),
+  archiveOriginalDocuments: z.boolean(),
+  sessionTimeoutMinutes: z.coerce.number().int().min(5).max(1440),
+  defaultErp: z.enum(erpSystems)
+});
+
+export const integrationSchema = z.object({
+  system: z.enum(erpSystems),
+  syncSettings: z.record(z.unknown()).default({})
+});
+
+export const copilotQuestionSchema = z.object({
+  question: z.string().trim().min(2).max(1000)
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type VendorInput = z.infer<typeof vendorSchema>;
 export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>;
 export type InvoiceInput = z.infer<typeof invoiceSchema>;
+export type InvoiceTransitionInput = z.infer<typeof invoiceTransitionSchema>;
+export type CommentInput = z.infer<typeof commentSchema>;
 export type ApprovalDecisionInput = z.infer<typeof approvalDecisionSchema>;
 export type WorkflowRuleInput = z.infer<typeof workflowRuleSchema>;
+export type UserInput = z.infer<typeof userSchema>;
+export type UserStatusInput = z.infer<typeof userStatusSchema>;
+export type OrganizationSettingsInput = z.infer<typeof organizationSettingsSchema>;
+export type IntegrationInput = z.infer<typeof integrationSchema>;
+export type CopilotQuestionInput = z.infer<typeof copilotQuestionSchema>;

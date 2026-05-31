@@ -7,6 +7,8 @@ import type {
   WorkflowRuleInput
 } from "@ledgent/contracts";
 import type { ApprovalTask, AuditEvent, AuthUser, Invoice, PurchaseOrder, Vendor } from "../types/domain";
+import { store } from "../store";
+import { showToast } from "../store/app-slice";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const ACCESS_TOKEN_KEY = "ledgent.accessToken";
@@ -26,6 +28,11 @@ type ApiLoginResponse = {
   user: AuthUser;
 };
 
+type ApiTokenResponse = {
+  accessToken: string;
+  refreshToken: string;
+};
+
 export type BrandMeta = {
   title: string;
   description: string;
@@ -40,7 +47,12 @@ export function getAccessToken() {
 
 export function getCurrentUser() {
   const raw = window.localStorage.getItem(USER_KEY);
-  return raw ? (JSON.parse(raw) as AuthUser) : null;
+  try {
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    clearSession();
+    return null;
+  }
 }
 
 export function clearSession() {
@@ -60,7 +72,38 @@ function toIsoDate(value: unknown) {
   return typeof value === "string" ? value.slice(0, 10) : "";
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+let refreshPromise: Promise<boolean> | null = null;
+
+function storeTokens(tokens: ApiTokenResponse) {
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
+  window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+}
+
+async function refreshSession() {
+  const refreshToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  if (!refreshToken) return false;
+
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken })
+    })
+      .then(async (response) => {
+        if (!response.ok) return false;
+        storeTokens((await response.json()) as ApiTokenResponse);
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, allowRefresh = true): Promise<T> {
   const headers = new Headers(options.headers);
   const token = getAccessToken();
 
@@ -77,8 +120,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers
   });
 
+  if (response.status === 401 && allowRefresh && path !== "/auth/login" && path !== "/auth/refresh") {
+    const refreshed = await refreshSession();
+    if (refreshed) return request<T>(path, options, false);
+  }
+
   if (response.status === 401) {
     clearSession();
+    store.dispatch(showToast({ message: "Your session expired. Please sign in again.", severity: "warning" }));
+    if (window.location.pathname !== "/login") window.location.assign("/login");
     throw new Error("Your session expired. Please sign in again.");
   }
 
@@ -116,6 +166,8 @@ function mapInvoice(record: any): Invoice {
     extractionScore: toNumber(record.extractionScore),
     matchScore: toNumber(record.matchScore),
     exceptionSummary: record.exceptionSummary ?? undefined,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
     lineItems: record.lineItems?.map((line: any) => ({
       id: line.id,
       description: line.description,
@@ -124,6 +176,40 @@ function mapInvoice(record: any): Invoice {
       taxAmount: toNumber(line.taxAmount),
       totalAmount: toNumber(line.totalAmount),
       confidence: line.confidence ? toNumber(line.confidence) : undefined
+    })),
+    documents: record.documents?.map((document: any) => ({
+      id: document.id,
+      fileName: document.fileName,
+      mimeType: document.mimeType,
+      sizeBytes: document.sizeBytes,
+      createdAt: document.createdAt
+    })),
+    approvalTasks: record.approvalTasks?.map((task: any) => ({
+      id: task.id,
+      status: task.status,
+      dueAt: task.dueAt,
+      completedAt: task.completedAt,
+      approverName: task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : undefined,
+      stepName: task.workflowStep?.name
+    })),
+    aiLogs: record.aiLogs?.map((log: any) => ({
+      id: log.id,
+      agentName: log.agentName,
+      model: log.model,
+      confidence: toNumber(log.confidence),
+      createdAt: log.createdAt
+    })),
+    journalEntries: record.journalEntries?.map((entry: any) => ({
+      id: entry.id,
+      status: entry.status,
+      erpSystem: entry.erpSystem,
+      postedAt: entry.postedAt,
+      createdAt: entry.createdAt
+    })),
+    comments: record.comments?.map((comment: any) => ({
+      id: comment.id,
+      body: comment.body,
+      createdAt: comment.createdAt
     }))
   };
 }
@@ -156,8 +242,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(values)
     });
-    window.localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken);
-    window.localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken);
+    storeTokens(response);
     window.localStorage.setItem(USER_KEY, JSON.stringify(response.user));
     return response;
   },
@@ -281,6 +366,14 @@ export const api = {
   async invoice(id: string) {
     return mapInvoice(await request<any>(`/invoices/${id}`));
   },
+  processInvoice: (id: string) =>
+    request(`/ai/invoices/${id}/process`, {
+      method: "POST"
+    }),
+  routeInvoice: (id: string) =>
+    request(`/approvals/route/${id}`, {
+      method: "POST"
+    }),
   async approvals() {
     const records = await request<any[]>("/approvals/queue");
     return records.map(
@@ -346,6 +439,11 @@ export const api = {
     request("/organizations/current/settings", {
       method: "PATCH",
       body: JSON.stringify(settings)
+    }),
+  notifications: () => request<any[]>("/notifications"),
+  markNotificationRead: (id: string) =>
+    request(`/notifications/${id}/read`, {
+      method: "POST"
     }),
   async reports() {
     const [spendTrend, invoices, vendors] = await Promise.all([api.request<any[]>("/reports/spend"), api.invoices(), api.vendors()]);

@@ -39,8 +39,8 @@ export class VendorsService {
     return { items, total, page, pageSize };
   }
 
-  create(organizationId: string, userId: string, input: VendorInput) {
-    return this.prisma.vendor.create({
+  async create(organizationId: string, userId: string, input: VendorInput) {
+    const vendor = await this.prisma.vendor.create({
       data: {
         organizationId,
         createdById: userId,
@@ -48,6 +48,19 @@ export class VendorsService {
         ...input
       }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId,
+        action: "VENDOR_CREATED",
+        entityType: "Vendor",
+        entityId: vendor.id,
+        after: { name: vendor.name, riskLevel: vendor.riskLevel, paymentTerms: vendor.paymentTerms }
+      }
+    });
+
+    return vendor;
   }
 
   async update(organizationId: string, id: string, userId: string, input: Partial<VendorInput>) {

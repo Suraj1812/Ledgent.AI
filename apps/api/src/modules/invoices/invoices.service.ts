@@ -1,10 +1,20 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { InvoiceInput } from "@ledgent/contracts";
+import { createHash, randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly s3: S3Client;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService
+  ) {
+    this.s3 = new S3Client({ region: this.config.get<string>("AWS_REGION", "us-east-1") });
+  }
 
   async list(organizationId: string, query: { page?: number; pageSize?: number; search?: string; status?: string }) {
     const page = Number(query.page ?? 1);
@@ -74,7 +84,7 @@ export class InvoicesService {
 
     const { lineItems, ...invoice } = input;
 
-    return this.prisma.invoice.create({
+    const created = await this.prisma.invoice.create({
       data: {
         ...invoice,
         organizationId,
@@ -85,6 +95,19 @@ export class InvoicesService {
       },
       include: { vendor: true, purchaseOrder: true, lineItems: true }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId,
+        action: "INVOICE_CREATED",
+        entityType: "Invoice",
+        entityId: created.id,
+        after: { invoiceNumber: created.invoiceNumber, totalAmount: created.totalAmount, status: created.status }
+      }
+    });
+
+    return created;
   }
 
   async attachDocument(
@@ -97,7 +120,33 @@ export class InvoicesService {
       throw new BadRequestException("Document upload is required");
     }
 
-    return this.prisma.document.create({
+    const allowedMimeTypes = new Set(["application/pdf", "image/png", "image/jpeg"]);
+    if (!allowedMimeTypes.has(file.mimetype)) {
+      throw new BadRequestException("Only PDF, PNG, and JPEG invoice documents are supported");
+    }
+
+    const bucket = this.config.get<string>("S3_BUCKET");
+    if (!bucket) {
+      throw new ServiceUnavailableException("Document storage is not configured");
+    }
+
+    await this.prisma.invoice.findFirstOrThrow({ where: { id: invoiceId, organizationId, deletedAt: null } });
+
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `organizations/${organizationId}/invoices/${invoiceId}/${randomUUID()}-${safeName}`;
+    const checksum = createHash("sha256").update(file.buffer).digest("hex");
+
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: storageKey,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        Metadata: { checksum }
+      })
+    );
+
+    const document = await this.prisma.document.create({
       data: {
         organizationId,
         invoiceId,
@@ -105,10 +154,24 @@ export class InvoicesService {
         fileName: file.originalname,
         mimeType: file.mimetype,
         sizeBytes: file.size,
-        storageKey: `organizations/${organizationId}/invoices/${invoiceId}/${Date.now()}-${file.originalname}`,
+        storageKey,
+        checksum,
         createdById: userId
       }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId,
+        action: "INVOICE_DOCUMENT_ATTACHED",
+        entityType: "Document",
+        entityId: document.id,
+        after: { invoiceId, fileName: document.fileName, mimeType: document.mimeType, sizeBytes: document.sizeBytes }
+      }
+    });
+
+    return document;
   }
 
   async transition(organizationId: string, id: string, userId: string, status: string, reason?: string) {

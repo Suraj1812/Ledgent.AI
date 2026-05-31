@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   CardContent,
-  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -25,6 +24,7 @@ import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
 import type { Invoice } from "../types/domain";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const colors = ["#d5a858", "#3b342b", "#0f8f7f", "#c2413b"];
@@ -33,7 +33,7 @@ export function DashboardPage() {
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   return (

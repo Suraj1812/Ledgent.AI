@@ -23,18 +23,36 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { api } from "../services/api";
+import { notify } from "../utils/notify";
 
 export function UserManagementPage() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { data: users = [] } = useQuery({ queryKey: ["users"], queryFn: api.users });
+  const { data: users = [], isLoading } = useQuery({ queryKey: ["users"], queryFn: api.users });
   const updateStatus = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.updateUserStatus(id, isActive),
-    onSuccess: async () => {
+    onMutate: async ({ id, isActive }) => {
+      await queryClient.cancelQueries({ queryKey: ["users"] });
+      const previous = queryClient.getQueryData<any[]>(["users"]);
+      queryClient.setQueryData<any[]>(["users"], (current = []) =>
+        current.map((user) => (user.id === id ? { ...user, isActive } : user))
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      queryClient.setQueryData(["users"], context?.previous);
+    },
+    onSuccess: () => {
+      notify("User access updated.");
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
     }
   });
+
+  if (isLoading) return <PageSkeleton />;
 
   return (
     <Box>
@@ -119,6 +137,7 @@ function InviteUserDialog({ open, onClose }: { open: boolean; onClose: () => voi
     mutationFn: api.createUser,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
+      notify("User created successfully.");
       onClose();
     }
   });

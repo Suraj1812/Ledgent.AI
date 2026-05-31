@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   CardContent,
-  LinearProgress,
   Stack,
   Typography
 } from "@mui/material";
@@ -14,12 +13,13 @@ import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
 
 export function ReportsPage() {
   const { data } = useQuery({ queryKey: ["reports"], queryFn: api.reports });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const totalSpend = data.invoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0);

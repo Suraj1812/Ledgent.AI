@@ -1,8 +1,7 @@
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { BadRequestException, Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { ErpSystem, Prisma } from "@prisma/client";
+import type { IntegrationInput } from "@ledgent/contracts";
 import { PrismaService } from "../prisma/prisma.service";
-
-type ErpSystem = "SAP" | "NETSUITE" | "QUICKBOOKS" | "ZOHO_BOOKS" | "DYNAMICS";
 
 @Injectable()
 export class IntegrationsService {
@@ -15,21 +14,20 @@ export class IntegrationsService {
     });
   }
 
-  upsert(organizationId: string, userId: string, body: { system: ErpSystem; syncSettings?: Record<string, unknown> }) {
+  upsert(organizationId: string, userId: string, body: IntegrationInput) {
     return this.prisma.erpIntegration.upsert({
       where: { organizationId_system: { organizationId, system: body.system } },
       update: {
-        status: "CONNECTED",
-        syncSettings: (body.syncSettings ?? {}) as Prisma.InputJsonValue,
+        status: "DISCONNECTED",
+        syncSettings: body.syncSettings as Prisma.InputJsonValue,
         updatedById: userId,
         lastError: null
       },
       create: {
         organizationId,
         system: body.system,
-        status: "CONNECTED",
-        syncSettings: (body.syncSettings ?? {}) as Prisma.InputJsonValue,
-        credentialsRef: `secrets/${organizationId}/${body.system.toLowerCase()}`,
+        status: "DISCONNECTED",
+        syncSettings: body.syncSettings as Prisma.InputJsonValue,
         createdById: userId,
         updatedById: userId
       }
@@ -37,32 +35,16 @@ export class IntegrationsService {
   }
 
   async postInvoice(organizationId: string, invoiceId: string, system: ErpSystem) {
-    const invoice = await this.prisma.invoice.findFirstOrThrow({
-      where: { id: invoiceId, organizationId, deletedAt: null }
+    const integration = await this.prisma.erpIntegration.findFirst({
+      where: { organizationId, system, status: "CONNECTED", deletedAt: null }
     });
 
-    const journal = await this.prisma.journalEntry.create({
-      data: {
-        organizationId,
-        invoiceId,
-        erpSystem: system,
-        debitAccount: "6000-Accounts Payable Expense",
-        creditAccount: "2000-Accounts Payable",
-        amount: invoice.totalAmount,
-        status: "POSTED",
-        postedAt: new Date()
-      }
-    });
+    if (!integration?.credentialsRef) {
+      throw new BadRequestException(`${system} is not connected. Configure secure ERP credentials before posting invoices.`);
+    }
 
-    await this.prisma.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        status: "POSTED",
-        erpPostingId: journal.id,
-        postedAt: new Date()
-      }
-    });
-
-    return journal;
+    throw new ServiceUnavailableException(
+      `${system} live posting is not configured. Install the provider connector before posting invoice ${invoiceId}.`
+    );
   }
 }

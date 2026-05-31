@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
-import { invoiceSchema } from "@ledgent/contracts";
+import { commentSchema, invoiceSchema, invoiceTransitionSchema } from "@ledgent/contracts";
 import { CurrentUser, type AuthenticatedUser } from "../../common/decorators/current-user.decorator";
 import { Permissions } from "../../common/decorators/permissions.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -37,7 +37,7 @@ export class InvoicesController {
   @Permissions("invoices:upload")
   @Post(":id/documents")
   @ApiConsumes("multipart/form-data")
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024, files: 1 } }))
   attachDocument(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
@@ -51,15 +51,19 @@ export class InvoicesController {
   transition(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
-    @Body("status") status: string,
-    @Body("reason") reason?: string
+    @Body(new ZodValidationPipe(invoiceTransitionSchema)) body: unknown
   ) {
-    return this.invoices.transition(user.organizationId, id, user.sub, status, reason);
+    const transition = body as { status: string; reason?: string };
+    return this.invoices.transition(user.organizationId, id, user.sub, transition.status, transition.reason);
   }
 
   @Permissions("invoices:review")
   @Post(":id/comments")
-  addComment(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body("body") body: string) {
-    return this.invoices.addComment(user.organizationId, id, user.sub, body);
+  addComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(commentSchema)) body: unknown
+  ) {
+    return this.invoices.addComment(user.organizationId, id, user.sub, (body as { body: string }).body);
   }
 }

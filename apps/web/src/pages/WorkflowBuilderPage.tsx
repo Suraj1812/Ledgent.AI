@@ -14,17 +14,20 @@ import DragIndicatorOutlinedIcon from "@mui/icons-material/DragIndicatorOutlined
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../components/PageHeader";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { api } from "../services/api";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export function WorkflowBuilderPage() {
   const queryClient = useQueryClient();
-  const { data: workflows = [] } = useQuery({ queryKey: ["workflows"], queryFn: api.workflows });
+  const { data: workflows = [], isLoading } = useQuery({ queryKey: ["workflows"], queryFn: api.workflows });
   const createWorkflow = useMutation({
     mutationFn: api.createWorkflow,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      notify("Approval workflow created.");
     }
   });
   const steps = workflows.flatMap((workflow) =>
@@ -36,6 +39,8 @@ export function WorkflowBuilderPage() {
       escalation: `${step.escalationHours}h`
     }))
   );
+
+  if (isLoading) return <PageSkeleton />;
 
   return (
     <Box>

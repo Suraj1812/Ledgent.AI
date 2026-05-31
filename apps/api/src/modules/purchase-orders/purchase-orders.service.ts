@@ -53,10 +53,10 @@ export class PurchaseOrdersService {
     return { items, total, page, pageSize };
   }
 
-  create(organizationId: string, userId: string, input: PurchaseOrderCreateInput) {
+  async create(organizationId: string, userId: string, input: PurchaseOrderCreateInput) {
     const { lineItems, ...po } = input;
 
-    return this.prisma.purchaseOrder.create({
+    const purchaseOrder = await this.prisma.purchaseOrder.create({
       data: {
         ...po,
         organizationId,
@@ -69,6 +69,19 @@ export class PurchaseOrdersService {
       },
       include: { vendor: true, lineItems: true }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId,
+        action: "PURCHASE_ORDER_CREATED",
+        entityType: "PurchaseOrder",
+        entityId: purchaseOrder.id,
+        after: { poNumber: purchaseOrder.poNumber, totalAmount: purchaseOrder.totalAmount, status: purchaseOrder.status }
+      }
+    });
+
+    return purchaseOrder;
   }
 
   async update(organizationId: string, id: string, userId: string, input: Partial<PurchaseOrderCreateInput>) {

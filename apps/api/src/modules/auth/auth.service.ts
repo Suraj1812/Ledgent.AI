@@ -87,8 +87,18 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
+    let payload: { sub: string };
+
+    try {
+      payload = await this.jwt.verifyAsync<{ sub: string }>(refreshToken, {
+        secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET")
+      });
+    } catch {
+      throw new UnauthorizedException("Refresh token is invalid");
+    }
+
     const sessions = await this.prisma.session.findMany({
-      where: { revokedAt: null, expiresAt: { gt: new Date() } },
+      where: { userId: payload.sub, revokedAt: null, expiresAt: { gt: new Date() } },
       include: { user: true }
     });
 
@@ -98,13 +108,29 @@ export class AuthService {
       throw new UnauthorizedException("Refresh token is invalid");
     }
 
-    return this.issueTokens({
+    const tokens = await this.issueTokens({
       sub: session.user.id,
       email: session.user.email,
       organizationId: session.user.organizationId,
       role: session.user.role,
       permissions: session.user.permissions
     });
+
+    await this.prisma.$transaction([
+      this.prisma.session.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() }
+      }),
+      this.prisma.session.create({
+        data: {
+          userId: session.user.id,
+          refreshHash: await hash(tokens.refreshToken, 12),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        }
+      })
+    ]);
+
+    return tokens;
   }
 
   async logout(userId: string) {

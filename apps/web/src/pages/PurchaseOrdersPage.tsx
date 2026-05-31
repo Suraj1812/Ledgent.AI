@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  LinearProgress,
   MenuItem,
   Stack,
   Table,
@@ -27,6 +26,8 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -37,7 +38,7 @@ export function PurchaseOrdersPage() {
   const { data: vendors = [] } = useQuery({ queryKey: ["vendors"], queryFn: api.vendors });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const approvedValue = data
@@ -183,6 +184,7 @@ function PurchaseOrderDialog({ open, onClose, vendors }: PurchaseOrderDialogProp
     mutationFn: api.createPurchaseOrder,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      notify("Purchase order created successfully.");
       onClose();
     }
   });

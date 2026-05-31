@@ -6,7 +6,6 @@ import {
   Checkbox,
   Divider,
   FormControlLabel,
-  LinearProgress,
   MenuItem,
   Stack,
   TextField,
@@ -17,6 +16,8 @@ import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { notify } from "../utils/notify";
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -25,11 +26,12 @@ export function SettingsPage() {
     mutationFn: api.updateSettings,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["organization"] });
+      notify("Settings saved.");
     }
   });
 
   if (!organization) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const settings = organization.settings ?? {};

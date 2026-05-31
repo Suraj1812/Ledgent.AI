@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Header } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { ConfigService } from "@nestjs/config";
 import { Public } from "../../common/decorators/public.decorator";
@@ -10,6 +10,7 @@ export class MetaController {
 
   @Public()
   @Get()
+  @Header("Cache-Control", "public, max-age=300, stale-while-revalidate=3600")
   getMeta() {
     const appUrl = this.config.get<string>("APP_URL", "http://localhost:5173").split(",")[0].trim();
 

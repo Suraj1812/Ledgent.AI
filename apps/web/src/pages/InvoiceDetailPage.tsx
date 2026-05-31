@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Divider,
-  LinearProgress,
   List,
   ListItem,
   ListItemText,
@@ -22,22 +21,70 @@ import ApprovalOutlinedIcon from "@mui/icons-material/ApprovalOutlined";
 import AutoFixHighOutlinedIcon from "@mui/icons-material/AutoFixHighOutlined";
 import CloudDoneOutlinedIcon from "@mui/icons-material/CloudDoneOutlined";
 import SyncAltOutlinedIcon from "@mui/icons-material/SyncAltOutlined";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
 import { ConfidenceBar } from "../components/ConfidenceBar";
+import { PageSkeleton } from "../components/PageSkeleton";
 import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function InvoiceDetailPage() {
-  const { id = "inv-1" } = useParams();
+  const { id = "" } = useParams();
+  const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["invoice", id], queryFn: () => api.invoice(id) });
+  const processInvoice = useMutation({
+    mutationFn: () => api.processInvoice(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoice", id] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      ]);
+      notify("Invoice extraction and matching completed.");
+    }
+  });
+  const routeInvoice = useMutation({
+    mutationFn: () => api.routeInvoice(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoice", id] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["approvals"] })
+      ]);
+      notify("Invoice routed for approval.");
+    }
+  });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
+
+  const activity = [
+    ...(data.documents ?? []).map((document) => ({
+      id: `document-${document.id}`,
+      label: `Document attached: ${document.fileName}`,
+      createdAt: document.createdAt
+    })),
+    ...(data.aiLogs ?? []).map((log) => ({
+      id: `ai-${log.id}`,
+      label: `${log.agentName.replaceAll("-", " ")} completed`,
+      createdAt: log.createdAt
+    })),
+    ...(data.approvalTasks ?? []).map((task) => ({
+      id: `approval-${task.id}`,
+      label: `${task.stepName ?? "Approval"}: ${task.status.replaceAll("_", " ")}`,
+      createdAt: task.completedAt ?? task.dueAt ?? data.updatedAt ?? ""
+    })),
+    ...(data.journalEntries ?? []).map((entry) => ({
+      id: `journal-${entry.id}`,
+      label: `${entry.erpSystem.replaceAll("_", " ")} journal ${entry.status.toLowerCase()}`,
+      createdAt: entry.postedAt ?? entry.createdAt
+    }))
+  ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   return (
     <Box>
@@ -46,10 +93,20 @@ export function InvoiceDetailPage() {
         subtitle={`${data.vendorName} - due ${data.dueDate}`}
         action={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<AutoFixHighOutlinedIcon />}>
+            <Button
+              variant="outlined"
+              startIcon={<AutoFixHighOutlinedIcon />}
+              disabled={processInvoice.isPending}
+              onClick={() => processInvoice.mutate()}
+            >
               Re-run extraction
             </Button>
-            <Button variant="contained" startIcon={<ApprovalOutlinedIcon />}>
+            <Button
+              variant="contained"
+              startIcon={<ApprovalOutlinedIcon />}
+              disabled={routeInvoice.isPending || data.status === "PENDING_APPROVAL" || data.status === "APPROVED"}
+              onClick={() => routeInvoice.mutate()}
+            >
               Route approval
             </Button>
           </Stack>
@@ -130,10 +187,13 @@ export function InvoiceDetailPage() {
                   AI extraction
                 </Typography>
                 <Stack spacing={2}>
-                  <ConfidenceBar label="Vendor name" value={0.96} />
-                  <ConfidenceBar label="Invoice number" value={0.98} />
-                  <ConfidenceBar label="Tax amount" value={0.84} />
-                  <ConfidenceBar label="Line item capture" value={data.extractionScore} />
+                  {data.aiLogs?.length ? (
+                    data.aiLogs.map((log) => (
+                      <ConfidenceBar key={log.id} label={log.agentName.replaceAll("-", " ")} value={log.confidence} />
+                    ))
+                  ) : (
+                    <Typography color="text.secondary">Extraction has not been run for this invoice yet.</Typography>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
@@ -152,10 +212,10 @@ export function InvoiceDetailPage() {
                   </Stack>
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <CloudDoneOutlinedIcon color="success" />
-                      <Typography>Document archived</Typography>
+                      <CloudDoneOutlinedIcon color={data.documents?.length ? "success" : "disabled"} />
+                      <Typography>Document archive</Typography>
                     </Stack>
-                    <Typography fontWeight={700}>Ready</Typography>
+                    <Typography fontWeight={700}>{data.documents?.length ? `${data.documents.length} stored` : "No document"}</Typography>
                   </Stack>
                 </Stack>
               </CardContent>
@@ -166,12 +226,16 @@ export function InvoiceDetailPage() {
                   Activity
                 </Typography>
                 <List disablePadding>
-                  {["Uploaded by AP inbox", "OCR extraction completed", "Amount variance detected", "Finance manager assigned"].map(
-                    (event) => (
-                      <ListItem key={event} disableGutters divider>
-                        <ListItemText primary={event} secondary="Today" />
+                  {activity.length ? (
+                    activity.map((event) => (
+                      <ListItem key={event.id} disableGutters divider>
+                        <ListItemText primary={event.label} secondary={event.createdAt ? new Date(event.createdAt).toLocaleString() : "Recorded"} />
                       </ListItem>
-                    )
+                    ))
+                  ) : (
+                    <ListItem disableGutters>
+                      <ListItemText primary="No activity recorded yet." />
+                    </ListItem>
                   )}
                 </List>
               </CardContent>

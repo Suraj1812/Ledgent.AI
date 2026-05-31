@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  LinearProgress,
   MenuItem,
   Stack,
   Tab,
@@ -30,6 +29,8 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
 import { exportCsv } from "../utils/exportCsv";
+import { PageSkeleton } from "../components/PageSkeleton";
+import { notify } from "../utils/notify";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -43,7 +44,7 @@ export function InvoicesPage() {
   const { data: purchaseOrders = [] } = useQuery({ queryKey: ["purchase-orders"], queryFn: api.purchaseOrders });
 
   if (!data) {
-    return <LinearProgress />;
+    return <PageSkeleton />;
   }
 
   const visible = (tab === "ALL" ? data : data.filter((invoice) => invoice.status === tab)).filter((invoice) =>
@@ -208,6 +209,7 @@ function InvoiceDialog({ open, onClose, vendors, purchaseOrders }: InvoiceDialog
     mutationFn: api.createInvoice,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      notify("Invoice created successfully.");
       onClose();
     }
   });

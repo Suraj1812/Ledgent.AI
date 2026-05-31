@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { hash } from "bcryptjs";
-import { randomBytes } from "crypto";
+import type { UserInput } from "@ledgent/contracts";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -26,29 +26,16 @@ export class UsersService {
     });
   }
 
-  async create(organizationId: string, body: {
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: "SUPER_ADMIN" | "FINANCE_ADMIN" | "AP_ACCOUNTANT" | "FINANCE_MANAGER" | "CONTROLLER" | "CFO" | "AUDITOR" | "READ_ONLY";
-    permissions?: string[];
-    password?: string;
-  }) {
-    const password = body.password ?? randomBytes(18).toString("base64url");
-
-    if (password.length < 12) {
-      throw new BadRequestException("Temporary password must be at least 12 characters");
-    }
-
-    return this.prisma.user.create({
+  async create(organizationId: string, actorId: string, body: UserInput) {
+    const user = await this.prisma.user.create({
       data: {
         organizationId,
         email: body.email,
         firstName: body.firstName,
         lastName: body.lastName,
         role: body.role,
-        permissions: body.permissions ?? [],
-        passwordHash: await hash(password, 12)
+        permissions: body.permissions,
+        passwordHash: await hash(body.password, 12)
       },
       select: {
         id: true,
@@ -60,13 +47,39 @@ export class UsersService {
         isActive: true
       }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId: actorId,
+        action: "USER_CREATED",
+        entityType: "User",
+        entityId: user.id,
+        after: { email: user.email, role: user.role, isActive: user.isActive }
+      }
+    });
+
+    return user;
   }
 
-  updateStatus(organizationId: string, id: string, isActive: boolean) {
-    return this.prisma.user.update({
+  async updateStatus(organizationId: string, actorId: string, id: string, isActive: boolean) {
+    const user = await this.prisma.user.update({
       where: { id, organizationId },
       data: { isActive },
       select: { id: true, email: true, isActive: true }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId,
+        userId: actorId,
+        action: "USER_STATUS_UPDATED",
+        entityType: "User",
+        entityId: user.id,
+        after: { email: user.email, isActive: user.isActive }
+      }
+    });
+
+    return user;
   }
 }
