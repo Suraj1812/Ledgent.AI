@@ -111,7 +111,12 @@ export const paginationSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
-  mfaCode: z.string().trim().min(6).max(8).optional()
+  mfaCode: z
+    .string()
+    .trim()
+    .transform((value) => value || undefined)
+    .pipe(z.string().min(6).max(8).optional())
+    .optional()
 });
 
 export const refreshTokenSchema = z.object({

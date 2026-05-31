@@ -1,6 +1,7 @@
 import {
   integrationSchema,
   invoiceTransitionSchema,
+  loginSchema,
   organizationSettingsSchema,
   refreshTokenSchema,
   userSchema
@@ -42,5 +43,13 @@ describe("shared write contracts", () => {
     expect(invoiceTransitionSchema.safeParse({ status: "APPROVED", reason: "Reviewed" }).success).toBe(true);
     expect(invoiceTransitionSchema.safeParse({ status: "REMOVED" }).success).toBe(false);
     expect(refreshTokenSchema.safeParse({ refreshToken: "too-short" }).success).toBe(false);
+  });
+
+  it("treats an empty optional MFA code as absent", () => {
+    expect(loginSchema.parse({ email: "finance@example.com", password: "a-strong-password", mfaCode: "" })).toEqual({
+      email: "finance@example.com",
+      password: "a-strong-password",
+      mfaCode: undefined
+    });
   });
 });
