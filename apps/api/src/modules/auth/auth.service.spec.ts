@@ -1,10 +1,11 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { hash } from "bcryptjs";
+import { createHash } from "crypto";
 import { AuthService } from "./auth.service";
 
 describe("AuthService refresh", () => {
+  const digest = (token: string) => createHash("sha256").update(token).digest("hex");
   const user = {
     id: "user-1",
     email: "admin@ledgent.ai",
@@ -51,7 +52,7 @@ describe("AuthService refresh", () => {
         id: "session-1",
         userId: user.id,
         user,
-        refreshHash: await hash(refreshToken, 4)
+        refreshHash: digest(refreshToken)
       }
     ]);
 
@@ -74,5 +75,24 @@ describe("AuthService refresh", () => {
       UnauthorizedException
     );
     expect(prisma.session.findMany).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a different long token that shares the same prefix", async () => {
+    const { service, jwt, prisma } = createService();
+    const sharedPrefix = "x".repeat(100);
+    const storedToken = `${sharedPrefix}-stored`;
+    const differentToken = `${sharedPrefix}-different`;
+    jwt.verifyAsync.mockResolvedValue({ sub: user.id });
+    prisma.session.findMany.mockResolvedValue([
+      {
+        id: "session-1",
+        userId: user.id,
+        user,
+        refreshHash: digest(storedToken)
+      }
+    ]);
+
+    await expect(service.refresh(differentToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

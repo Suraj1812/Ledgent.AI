@@ -1,8 +1,8 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { compare, hash } from "bcryptjs";
-import { randomBytes } from "crypto";
+import { compare } from "bcryptjs";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import type { LoginInput } from "@ledgent/contracts";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -45,7 +45,7 @@ export class AuthService {
     await this.prisma.session.create({
       data: {
         userId: user.id,
-        refreshHash: await hash(tokens.refreshToken, 12),
+        refreshHash: digestRefreshToken(tokens.refreshToken),
         userAgent: meta.userAgent,
         ipAddress: meta.ipAddress,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -124,7 +124,7 @@ export class AuthService {
       this.prisma.session.create({
         data: {
           userId: session.user.id,
-          refreshHash: await hash(tokens.refreshToken, 12),
+          refreshHash: digestRefreshToken(tokens.refreshToken),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       })
@@ -185,11 +185,20 @@ export class AuthService {
 }
 
 async function firstMatchingSession<T extends { refreshHash: string }>(sessions: T[], token: string) {
+  const digest = digestRefreshToken(token);
+
   for (const session of sessions) {
-    if (await compare(token, session.refreshHash)) {
+    const stored = Buffer.from(session.refreshHash);
+    const candidate = Buffer.from(digest);
+
+    if (stored.length === candidate.length && timingSafeEqual(stored, candidate)) {
       return session;
     }
   }
 
   return null;
+}
+
+function digestRefreshToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }
