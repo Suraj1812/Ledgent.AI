@@ -1,7 +1,22 @@
 import { PrismaClient, Role } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { seedDemoWorkspace } from "./seed-demo";
 
 const prisma = new PrismaClient();
+const fullPermissions = [
+  "dashboard:read",
+  "vendors:manage",
+  "purchase_orders:manage",
+  "invoices:upload",
+  "invoices:review",
+  "invoices:approve",
+  "workflows:manage",
+  "reports:read",
+  "audit:read",
+  "users:manage",
+  "settings:manage",
+  "erp:manage"
+];
 
 async function main() {
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@ledgent.ai";
@@ -34,7 +49,7 @@ async function main() {
       organizationId: organization.id,
       passwordHash: await hash(bootstrapPassword, 12),
       role: Role.FINANCE_ADMIN,
-      permissions: ["dashboard:read", "vendors:manage", "invoices:approve", "reports:read", "audit:read"],
+      permissions: fullPermissions,
       isActive: true
     },
     create: {
@@ -44,7 +59,7 @@ async function main() {
       firstName: "Ledgent",
       lastName: "Admin",
       role: Role.FINANCE_ADMIN,
-      permissions: ["dashboard:read", "vendors:manage", "invoices:approve", "reports:read", "audit:read"]
+      permissions: fullPermissions
     }
   });
 
@@ -82,6 +97,8 @@ async function main() {
       }
     });
   }
+
+  await seedDemoWorkspace(prisma, organization.id, admin.id);
 }
 
 main()
