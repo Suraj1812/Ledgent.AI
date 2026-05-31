@@ -1,0 +1,13 @@
+<svg width="1180" height="260" viewBox="0 0 1180 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1180" height="260" fill="white"/>
+  <g transform="translate(36 18)">
+    <path d="M0 26h116c17 0 30 13 30 30v9h-26v-9c0-3-2-5-5-5H0V26Z" fill="#e7c68b"/>
+    <path d="M0 91h137c6-14 20-24 36-24 22 0 39 17 39 39s-17 39-39 39c-16 0-30-10-36-24H0V91Z" fill="#e7c68b"/>
+    <circle cx="173" cy="106" r="17" fill="white"/>
+    <path d="M0 158h93v28H0v-28Z" fill="#e7c68b"/>
+    <path d="M0 216h161c8 0 15-7 15-15v-95h28v95c0 24-19 43-43 43H0v-28Z" fill="#e7c68b"/>
+    <circle cx="214" cy="25" r="24" stroke="#e7c68b" stroke-width="13"/>
+  </g>
+  <text x="330" y="166" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="800" fill="#3b342b">Ledgent</text>
+  <text x="742" y="166" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="800" fill="#e7c68b">AI</text>
+</svg>

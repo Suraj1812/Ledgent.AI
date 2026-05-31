@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+.turbo
+.vite
+.vercel
+.railway
+.env
+.env.*
+!.env.example
+coverage
+*.log
+.DS_Store
+apps/api/prisma/migrations/dev.db
+uploads

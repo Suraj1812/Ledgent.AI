@@ -1,0 +1,516 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  FINANCE_ADMIN
+  AP_ACCOUNTANT
+  FINANCE_MANAGER
+  CONTROLLER
+  CFO
+  AUDITOR
+  READ_ONLY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  EXTRACTING
+  AP_REVIEW
+  MATCHING
+  EXCEPTION
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  POSTED
+  PAID
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+  CLOSED
+}
+
+enum VendorRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  BLOCKED
+}
+
+enum ApprovalTaskStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REQUESTED_CHANGES
+  ESCALATED
+  DELEGATED
+}
+
+enum DocumentType {
+  INVOICE
+  PURCHASE_ORDER
+  GOODS_RECEIPT
+  TAX_FORM
+  CONTRACT
+  OTHER
+}
+
+enum ErpSystem {
+  SAP
+  NETSUITE
+  QUICKBOOKS
+  ZOHO_BOOKS
+  DYNAMICS
+}
+
+enum ErpIntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+  SYNCING
+}
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  WORKFLOW
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  FAILED
+}
+
+model Organization {
+  id              String              @id @default(uuid())
+  name            String
+  slug            String              @unique
+  plan            String              @default("enterprise")
+  taxId           String?
+  baseCurrency    String              @default("USD")
+  settings        Json                @default("{}")
+  users           User[]
+  vendors         Vendor[]
+  purchaseOrders  PurchaseOrder[]
+  invoices        Invoice[]
+  documents       Document[]
+  workflows       ApprovalWorkflow[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  erpIntegrations ErpIntegration[]
+  aiLogs          AiProcessingLog[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+}
+
+model User {
+  id                     String         @id @default(uuid())
+  organizationId         String
+  organization           Organization   @relation(fields: [organizationId], references: [id])
+  email                  String         @unique
+  passwordHash           String
+  firstName              String
+  lastName               String
+  role                   Role
+  permissions            String[]       @default([])
+  mfaEnabled             Boolean        @default(false)
+  mfaSecret              String?
+  isActive               Boolean        @default(true)
+  lastLoginAt            DateTime?
+  sessions               Session[]
+  assignedApprovalTasks  ApprovalTask[] @relation("AssignedApprovals")
+  completedApprovalTasks ApprovalTask[] @relation("CompletedApprovals")
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  deletedAt              DateTime?
+
+  @@index([organizationId, role])
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  refreshHash  String
+  userAgent    String?
+  ipAddress    String?
+  revokedAt    DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+}
+
+model Vendor {
+  id              String              @id @default(uuid())
+  organizationId  String
+  organization    Organization        @relation(fields: [organizationId], references: [id])
+  name            String
+  legalName       String?
+  taxId           String?
+  email           String?
+  phone           String?
+  website         String?
+  paymentTerms    String              @default("Net 30")
+  currency        String              @default("USD")
+  riskLevel       VendorRiskLevel     @default(LOW)
+  onboardingState String              @default("active")
+  contacts        VendorContact[]
+  bankAccounts    VendorBankAccount[]
+  purchaseOrders  PurchaseOrder[]
+  invoices        Invoice[]
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([organizationId, name])
+  @@index([organizationId, riskLevel])
+}
+
+model VendorContact {
+  id          String    @id @default(uuid())
+  vendorId    String
+  vendor      Vendor    @relation(fields: [vendorId], references: [id])
+  name        String
+  email       String?
+  phone       String?
+  title       String?
+  isPrimary   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+
+model VendorBankAccount {
+  id                String    @id @default(uuid())
+  vendorId          String
+  vendor            Vendor    @relation(fields: [vendorId], references: [id])
+  bankName          String
+  accountLast4      String
+  routingNumberHash String?
+  swiftCode         String?
+  country           String    @default("US")
+  isVerified        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+}
+
+model PurchaseOrder {
+  id                   String                 @id @default(uuid())
+  organizationId       String
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+  vendorId             String
+  vendor               Vendor                 @relation(fields: [vendorId], references: [id])
+  poNumber             String
+  department           String
+  status               PurchaseOrderStatus    @default(DRAFT)
+  currency             String                 @default("USD")
+  totalAmount          Decimal                @db.Decimal(14, 2)
+  approvedAmount       Decimal                @db.Decimal(14, 2)
+  expectedDeliveryDate DateTime?
+  lineItems            PurchaseOrderLineItem[]
+  goodsReceipts        GoodsReceipt[]
+  invoices             Invoice[]
+  createdById          String?
+  updatedById          String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId, status])
+}
+
+model PurchaseOrderLineItem {
+  id              String        @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  sku             String?
+  description     String
+  quantity        Decimal       @db.Decimal(14, 4)
+  unitPrice       Decimal       @db.Decimal(14, 4)
+  taxRate         Decimal       @default(0) @db.Decimal(8, 4)
+  totalAmount     Decimal       @db.Decimal(14, 2)
+  receivedQty     Decimal       @default(0) @db.Decimal(14, 4)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model GoodsReceipt {
+  id              String                 @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  receiptNumber   String
+  receivedAt      DateTime
+  lineItems       GoodsReceiptLineItem[]
+  createdById     String?
+  createdAt       DateTime               @default(now())
+}
+
+model GoodsReceiptLineItem {
+  id             String       @id @default(uuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id])
+  description    String
+  quantity       Decimal      @db.Decimal(14, 4)
+}
+
+model Invoice {
+  id                 String             @id @default(uuid())
+  organizationId     String
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  vendorId           String
+  vendor             Vendor             @relation(fields: [vendorId], references: [id])
+  purchaseOrderId    String?
+  purchaseOrder      PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  invoiceNumber      String
+  status             InvoiceStatus      @default(DRAFT)
+  invoiceDate        DateTime
+  dueDate            DateTime
+  currency           String             @default("USD")
+  subtotalAmount     Decimal            @db.Decimal(14, 2)
+  taxAmount          Decimal            @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal            @db.Decimal(14, 2)
+  paymentTerms       String             @default("Net 30")
+  extractionScore    Decimal?           @db.Decimal(6, 4)
+  matchScore         Decimal?           @db.Decimal(6, 4)
+  exceptionSummary   String?
+  erpPostingId       String?
+  postedAt           DateTime?
+  paidAt             DateTime?
+  lineItems          InvoiceLineItem[]
+  documents          Document[]
+  approvalTasks      ApprovalTask[]
+  comments           Comment[]
+  aiLogs             AiProcessingLog[]
+  journalEntries     JournalEntry[]
+  createdById        String?
+  updatedById        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  @@unique([organizationId, vendorId, invoiceNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  description String
+  quantity    Decimal  @db.Decimal(14, 4)
+  unitPrice   Decimal  @db.Decimal(14, 4)
+  taxAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal  @db.Decimal(14, 2)
+  confidence  Decimal? @db.Decimal(6, 4)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Document {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invoiceId      String?
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id])
+  type           DocumentType
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  checksum       String?
+  extractedText  String?
+  metadata       Json         @default("{}")
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId, type])
+}
+
+model ApprovalWorkflow {
+  id             String         @id @default(uuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  name           String
+  isDefault      Boolean        @default(false)
+  isActive       Boolean        @default(true)
+  rules          Json           @default("{}")
+  steps          WorkflowStep[]
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+}
+
+model WorkflowStep {
+  id                 String           @id @default(uuid())
+  workflowId         String
+  workflow           ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+  name               String
+  sequence           Int
+  approverRole       Role
+  thresholdAmount    Decimal          @default(0) @db.Decimal(14, 2)
+  escalationHours    Int              @default(24)
+  delegationAllowed  Boolean          @default(true)
+  conditionExpression String?
+  approvalTasks      ApprovalTask[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model ApprovalTask {
+  id             String             @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice            @relation(fields: [invoiceId], references: [id])
+  workflowStepId String?
+  workflowStep   WorkflowStep?      @relation(fields: [workflowStepId], references: [id])
+  assignedToId   String
+  assignedTo     User               @relation("AssignedApprovals", fields: [assignedToId], references: [id])
+  completedById  String?
+  completedBy    User?              @relation("CompletedApprovals", fields: [completedById], references: [id])
+  status         ApprovalTaskStatus @default(PENDING)
+  dueAt          DateTime?
+  completedAt    DateTime?
+  comment        String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([assignedToId, status])
+  @@index([invoiceId, status])
+}
+
+model Notification {
+  id             String              @id @default(uuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User                @relation(fields: [userId], references: [id])
+  channel        NotificationChannel
+  title          String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime            @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, createdAt])
+}
+
+model ErpIntegration {
+  id              String               @id @default(uuid())
+  organizationId  String
+  organization    Organization         @relation(fields: [organizationId], references: [id])
+  system          ErpSystem
+  status          ErpIntegrationStatus @default(DISCONNECTED)
+  credentialsRef  String?
+  syncSettings    Json                 @default("{}")
+  lastSyncAt      DateTime?
+  lastError       String?
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([organizationId, system])
+}
+
+model AiProcessingLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  invoiceId      String?
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id])
+  agentName      String
+  model          String
+  inputTokens    Int          @default(0)
+  outputTokens   Int          @default(0)
+  confidence     Decimal?     @db.Decimal(6, 4)
+  promptHash     String?
+  result         Json         @default("{}")
+  error          String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, agentName, createdAt])
+}
+
+model Comment {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  authorId    String?
+  body        String
+  isInternal  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+}
+
+model Attachment {
+  id             String   @id @default(uuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  storageKey     String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, entityType, entityId])
+}
+
+model JournalEntry {
+  id             String        @id @default(uuid())
+  organizationId String
+  invoiceId      String
+  invoice        Invoice       @relation(fields: [invoiceId], references: [id])
+  erpSystem      ErpSystem
+  debitAccount   String
+  creditAccount  String
+  amount         Decimal       @db.Decimal(14, 2)
+  status         JournalStatus @default(DRAFT)
+  postedAt       DateTime?
+  error          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId, status])
+}
