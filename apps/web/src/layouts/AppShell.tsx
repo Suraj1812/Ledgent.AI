@@ -5,13 +5,11 @@ import {
   Divider,
   Drawer,
   IconButton,
-  InputAdornment,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Stack,
-  TextField,
   Toolbar,
   Tooltip,
   Typography,
@@ -24,17 +22,14 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import MenuIcon from "@mui/icons-material/Menu";
-import NotificationsOutlinedIcon from "@mui/icons-material/NotificationsOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
-import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
-import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../store";
-import { setCopilotOpen, setSidebarOpen } from "../store/app-slice";
+import { setSidebarOpen } from "../store/app-slice";
 import { api, getCurrentUser } from "../services/api";
 
 const drawerWidth = 272;
@@ -148,28 +143,7 @@ export function AppShell() {
                 <MenuIcon />
               </IconButton>
             ) : null}
-            <TextField
-              placeholder="Search invoices, vendors, POs"
-              size="small"
-              sx={{ maxWidth: 420, flex: 1 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                )
-              }}
-            />
-            <Tooltip title="Open Copilot">
-              <IconButton color="primary" onClick={() => dispatch(setCopilotOpen(true))} aria-label="Open Copilot">
-                <SmartToyOutlinedIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Notifications">
-              <IconButton aria-label="Notifications">
-                <NotificationsOutlinedIcon />
-              </IconButton>
-            </Tooltip>
+            <Box sx={{ flex: 1 }} />
             <Tooltip title="Sign out">
               <IconButton
                 aria-label="Sign out"

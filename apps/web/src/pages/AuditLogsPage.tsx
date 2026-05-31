@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   CardContent,
   LinearProgress,
@@ -13,29 +14,61 @@ import {
   Typography
 } from "@mui/material";
 import { useQuery } from "@tanstack/react-query";
-import { ExportActions, PageHeader } from "../components/PageHeader";
+import { useState } from "react";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
+import { exportCsv } from "../utils/exportCsv";
 
 export function AuditLogsPage() {
+  const [action, setAction] = useState("");
+  const [entity, setEntity] = useState("");
+  const [actor, setActor] = useState("");
   const { data } = useQuery({ queryKey: ["audit-events"], queryFn: api.auditEvents });
 
   if (!data) {
     return <LinearProgress />;
   }
 
+  const filtered = data.filter((event) =>
+    event.action.toLowerCase().includes(action.toLowerCase()) &&
+    event.entityType.toLowerCase().includes(entity.toLowerCase()) &&
+    event.actor.toLowerCase().includes(actor.toLowerCase())
+  );
+
   return (
     <Box>
       <PageHeader
         title="Audit Logs"
         subtitle="Immutable evidence for login, upload, edit, approval, rejection, posting, and payment activity."
-        action={<ExportActions />}
+        action={
+          <Button
+            variant="contained"
+            startIcon={<FileDownloadOutlinedIcon />}
+            onClick={() =>
+              exportCsv(
+                `ledgent-audit-${new Date().toISOString().slice(0, 10)}.csv`,
+                filtered.map((event) => ({
+                  createdAt: event.createdAt,
+                  action: event.action,
+                  actor: event.actor,
+                  entityType: event.entityType,
+                  entityId: event.entityId,
+                  detail: event.detail
+                }))
+              )
+            }
+          >
+            Export audit
+          </Button>
+        }
       />
       <Card>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
-            <TextField label="Action" size="small" />
-            <TextField label="Entity" size="small" />
-            <TextField label="Actor" size="small" />
+            <TextField label="Action" size="small" value={action} onChange={(event) => setAction(event.target.value)} />
+            <TextField label="Entity" size="small" value={entity} onChange={(event) => setEntity(event.target.value)} />
+            <TextField label="Actor" size="small" value={actor} onChange={(event) => setActor(event.target.value)} />
           </Stack>
           <Table>
             <TableHead>
@@ -48,7 +81,7 @@ export function AuditLogsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {data.map((event) => (
+              {filtered.map((event) => (
                 <TableRow hover key={event.id}>
                   <TableCell>{new Date(event.createdAt).toLocaleString()}</TableCell>
                   <TableCell>
@@ -61,6 +94,13 @@ export function AuditLogsPage() {
                   <TableCell>{event.detail}</TableCell>
                 </TableRow>
               ))}
+              {!filtered.length ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography color="text.secondary">No audit events match the current filters.</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : null}
             </TableBody>
           </Table>
         </CardContent>

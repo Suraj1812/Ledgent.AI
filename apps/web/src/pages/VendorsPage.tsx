@@ -30,16 +30,20 @@ import type { z } from "zod";
 import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
+import { exportCsv } from "../utils/exportCsv";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function VendorsPage() {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const { data } = useQuery({ queryKey: ["vendors"], queryFn: api.vendors });
 
   if (!data) {
     return <LinearProgress />;
   }
+
+  const filtered = data.filter((vendor) => vendor.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Box>
@@ -48,7 +52,22 @@ export function VendorsPage() {
         subtitle="Onboard suppliers, monitor payment terms, maintain tax profiles, and track vendor risk."
         action={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<DownloadOutlinedIcon />}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadOutlinedIcon />}
+              onClick={() =>
+                exportCsv(
+                  `ledgent-vendors-${new Date().toISOString().slice(0, 10)}.csv`,
+                  filtered.map((vendor) => ({
+                    name: vendor.name,
+                    riskLevel: vendor.riskLevel,
+                    paymentTerms: vendor.paymentTerms,
+                    outstandingBalance: vendor.outstandingBalance,
+                    exceptionRate: Math.round(vendor.exceptionRate * 100)
+                  }))
+                )
+              }
+            >
               Export
             </Button>
             <Button variant="contained" startIcon={<AddBusinessOutlinedIcon />} onClick={() => setOpen(true)}>
@@ -97,7 +116,13 @@ export function VendorsPage() {
             <CardContent>
               <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
                 <Typography variant="h3">Supplier directory</Typography>
-                <TextField size="small" placeholder="Search vendors" sx={{ width: { xs: "100%", md: 320 } }} />
+                <TextField
+                  size="small"
+                  placeholder="Search vendors"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  sx={{ width: { xs: "100%", md: 320 } }}
+                />
               </Stack>
               <Table>
                 <TableHead>
@@ -110,7 +135,7 @@ export function VendorsPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {data.map((vendor) => (
+                  {filtered.map((vendor) => (
                     <TableRow key={vendor.id} hover>
                       <TableCell>
                         <Typography fontWeight={700}>{vendor.name}</Typography>
@@ -126,6 +151,13 @@ export function VendorsPage() {
                       <TableCell align="right">{Math.round(vendor.exceptionRate * 100)}%</TableCell>
                     </TableRow>
                   ))}
+                  {!filtered.length ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography color="text.secondary">No vendors match the current filters.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
                 </TableBody>
               </Table>
             </CardContent>

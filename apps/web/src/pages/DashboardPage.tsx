@@ -24,9 +24,10 @@ import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
 import type { Invoice } from "../types/domain";
+import { exportCsv } from "../utils/exportCsv";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-const colors = ["#2457d6", "#0f8f7f", "#b7791f", "#c2413b"];
+const colors = ["#d5a858", "#3b342b", "#0f8f7f", "#c2413b"];
 
 export function DashboardPage() {
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
@@ -40,7 +41,25 @@ export function DashboardPage() {
       <PageHeader
         title="AP Command Center"
         subtitle="Monitor invoice intake, matching quality, exceptions, approvals, and ERP readiness."
-        action={<Button variant="contained">Export dashboard</Button>}
+        action={
+          <Button
+            variant="contained"
+            onClick={() =>
+              exportCsv(
+                `ledgent-dashboard-${new Date().toISOString().slice(0, 10)}.csv`,
+                data.invoices.map((invoice: Invoice) => ({
+                  invoiceNumber: invoice.invoiceNumber,
+                  vendor: invoice.vendorName,
+                  status: invoice.status,
+                  amount: invoice.totalAmount,
+                  dueDate: invoice.dueDate
+                }))
+              )
+            }
+          >
+            Export dashboard
+          </Button>
+        }
       />
 
       <Grid container spacing={2.5}>
@@ -57,7 +76,7 @@ export function DashboardPage() {
           <MetricCard
             label="Monthly spend"
             value={currency.format(data.kpis.monthlySpend)}
-            helper="Forecast is tracking 8% above plan"
+            helper="Calculated from live invoice records"
             icon={<PaymentsOutlinedIcon />}
             progress={82}
           />
@@ -66,7 +85,7 @@ export function DashboardPage() {
           <MetricCard
             label="Exception rate"
             value={`${Math.round(data.kpis.exceptionRate * 100)}%`}
-            helper="Down 4 points from last month"
+            helper="Based on current invoice exceptions"
             icon={<ErrorOutlineOutlinedIcon />}
             progress={42}
           />
@@ -75,7 +94,7 @@ export function DashboardPage() {
           <MetricCard
             label="AI confidence"
             value={`${Math.round(data.kpis.aiConfidence * 100)}%`}
-            helper={`Median cycle time ${data.kpis.processingTime}`}
+            helper="Live extraction and match average"
             icon={<SpeedOutlinedIcon />}
             progress={94}
           />
@@ -93,15 +112,21 @@ export function DashboardPage() {
                 </Box>
                 <QueryStatsOutlinedIcon color="primary" />
               </Stack>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={data.spendTrend}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => (typeof value === "number" ? currency.format(value) : value)} />
-                  <Bar dataKey="spend" fill="#2457d6" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {data.spendTrend.length ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={data.spendTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => (typeof value === "number" ? currency.format(value) : value)} />
+                    <Bar dataKey="spend" fill="#d5a858" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <Stack sx={{ height: 260 }} alignItems="center" justifyContent="center">
+                  <Typography color="text.secondary">No invoice spend has been recorded yet.</Typography>
+                </Stack>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -113,16 +138,22 @@ export function DashboardPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 Open spend by vendor
               </Typography>
-              <ResponsiveContainer width="100%" height={230}>
-                <PieChart>
-                  <Pie data={data.vendorSpend} dataKey="value" nameKey="name" innerRadius={60} outerRadius={96}>
-                    {data.vendorSpend.map((entry, index) => (
-                      <Cell key={entry.name} fill={colors[index % colors.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => (typeof value === "number" ? currency.format(value) : value)} />
-                </PieChart>
-              </ResponsiveContainer>
+              {data.vendorSpend.length ? (
+                <ResponsiveContainer width="100%" height={230}>
+                  <PieChart>
+                    <Pie data={data.vendorSpend} dataKey="value" nameKey="name" innerRadius={60} outerRadius={96}>
+                      {data.vendorSpend.map((entry, index) => (
+                        <Cell key={entry.name} fill={colors[index % colors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => (typeof value === "number" ? currency.format(value) : value)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <Stack sx={{ height: 230 }} alignItems="center" justifyContent="center">
+                  <Typography color="text.secondary">No vendor spend has been recorded yet.</Typography>
+                </Stack>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -134,9 +165,10 @@ export function DashboardPage() {
                 Exception worklist
               </Typography>
               <Stack spacing={1.5}>
-                {data.invoices
-                  .filter((invoice: Invoice) => invoice.status === "EXCEPTION" || invoice.exceptionSummary)
-                  .map((invoice: Invoice) => (
+                {data.invoices.filter((invoice: Invoice) => invoice.status === "EXCEPTION" || invoice.exceptionSummary).length ? (
+                  data.invoices
+                    .filter((invoice: Invoice) => invoice.status === "EXCEPTION" || invoice.exceptionSummary)
+                    .map((invoice: Invoice) => (
                     <Stack
                       key={invoice.id}
                       direction={{ xs: "column", sm: "row" }}
@@ -153,7 +185,10 @@ export function DashboardPage() {
                       </Box>
                       <StatusChip value={invoice.status} />
                     </Stack>
-                  ))}
+                    ))
+                ) : (
+                  <Typography color="text.secondary">No invoice exceptions in the current workspace.</Typography>
+                )}
               </Stack>
             </CardContent>
           </Card>
@@ -167,17 +202,23 @@ export function DashboardPage() {
                 <ApprovalOutlinedIcon color="primary" />
               </Stack>
               <List disablePadding>
-                {data.approvals.map((approval) => (
-                  <ListItem key={approval.id} disableGutters divider>
-                    <ListItemText
-                      primary={`${approval.invoiceNumber} - ${currency.format(approval.amount)}`}
-                      secondary={`${approval.vendorName} waiting on ${approval.approverRole.replaceAll("_", " ")}`}
-                    />
-                    <Typography fontWeight={700} color={approval.bottleneckHours > 24 ? "error.main" : "warning.main"}>
-                      {approval.bottleneckHours}h
-                    </Typography>
+                {data.approvals.length ? (
+                  data.approvals.map((approval) => (
+                    <ListItem key={approval.id} disableGutters divider>
+                      <ListItemText
+                        primary={`${approval.invoiceNumber} - ${currency.format(approval.amount)}`}
+                        secondary={`${approval.vendorName} waiting on ${approval.approverRole.replaceAll("_", " ")}`}
+                      />
+                      <Typography fontWeight={700} color={approval.bottleneckHours > 24 ? "error.main" : "warning.main"}>
+                        {approval.bottleneckHours}h
+                      </Typography>
+                    </ListItem>
+                  ))
+                ) : (
+                  <ListItem disableGutters>
+                    <ListItemText primary="No approval bottlenecks currently." />
                   </ListItem>
-                ))}
+                )}
               </List>
             </CardContent>
           </Card>

@@ -11,7 +11,7 @@ import Grid from "@mui/material/GridLegacy";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import ForwardToInboxOutlinedIcon from "@mui/icons-material/ForwardToInboxOutlined";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../components/PageHeader";
 import { StatusChip } from "../components/StatusChip";
 import { api } from "../services/api";
@@ -19,7 +19,19 @@ import { api } from "../services/api";
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
 export function ApprovalCenterPage() {
+  const queryClient = useQueryClient();
   const { data } = useQuery({ queryKey: ["approvals"], queryFn: api.approvals });
+  const decision = useMutation({
+    mutationFn: ({ taskId, decision }: { taskId: string; decision: "APPROVE" | "REJECT" | "REQUEST_CHANGES" }) =>
+      api.decideApproval(taskId, { decision }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["approvals"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"] })
+      ]);
+    }
+  });
 
   if (!data) {
     return <LinearProgress />;
@@ -30,7 +42,6 @@ export function ApprovalCenterPage() {
       <PageHeader
         title="Approval Center"
         subtitle="Review routed invoices, resolve bottlenecks, delegate work, and preserve approval evidence."
-        action={<Button variant="outlined">Delegate queue</Button>}
       />
 
       <Grid container spacing={2.5}>
@@ -75,13 +86,29 @@ export function ApprovalCenterPage() {
                     </Grid>
                   </Grid>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                    <Button variant="contained" startIcon={<CheckCircleOutlineIcon />}>
+                    <Button
+                      variant="contained"
+                      startIcon={<CheckCircleOutlineIcon />}
+                      disabled={decision.isPending}
+                      onClick={() => decision.mutate({ taskId: approval.id, decision: "APPROVE" })}
+                    >
                       Approve
                     </Button>
-                    <Button variant="outlined" color="error" startIcon={<CloseOutlinedIcon />}>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<CloseOutlinedIcon />}
+                      disabled={decision.isPending}
+                      onClick={() => decision.mutate({ taskId: approval.id, decision: "REJECT" })}
+                    >
                       Reject
                     </Button>
-                    <Button variant="outlined" startIcon={<ForwardToInboxOutlinedIcon />}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<ForwardToInboxOutlinedIcon />}
+                      disabled={decision.isPending}
+                      onClick={() => decision.mutate({ taskId: approval.id, decision: "REQUEST_CHANGES" })}
+                    >
                       Request changes
                     </Button>
                   </Stack>
@@ -90,6 +117,15 @@ export function ApprovalCenterPage() {
             </Card>
           </Grid>
         ))}
+        {!data.length ? (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography color="text.secondary">No approval tasks are assigned to you right now.</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ) : null}
       </Grid>
     </Box>
   );

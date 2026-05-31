@@ -3,27 +3,30 @@ import {
   Button,
   Card,
   CardContent,
-  Checkbox,
   Divider,
-  FormControlLabel,
   MenuItem,
-  Slider,
   Stack,
   TextField,
   Typography
 } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
-import AddOutlinedIcon from "@mui/icons-material/AddOutlined";
 import DragIndicatorOutlinedIcon from "@mui/icons-material/DragIndicatorOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "../components/PageHeader";
 import { api } from "../services/api";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export function WorkflowBuilderPage() {
+  const queryClient = useQueryClient();
   const { data: workflows = [] } = useQuery({ queryKey: ["workflows"], queryFn: api.workflows });
+  const createWorkflow = useMutation({
+    mutationFn: api.createWorkflow,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workflows"] });
+    }
+  });
   const steps = workflows.flatMap((workflow) =>
     workflow.steps.map((step: any) => ({
       id: step.id,
@@ -40,14 +43,9 @@ export function WorkflowBuilderPage() {
         title="Workflow Builder"
         subtitle="Configure dynamic approval paths with threshold routing, escalations, delegations, and reminders."
         action={
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<AddOutlinedIcon />}>
-              Add rule
-            </Button>
-            <Button variant="contained" startIcon={<SaveOutlinedIcon />}>
-              Save workflow
-            </Button>
-          </Stack>
+          <Button variant="contained" startIcon={<SaveOutlinedIcon />} type="submit" form="workflow-rule-form" disabled={createWorkflow.isPending}>
+            Save workflow
+          </Button>
         }
       />
 
@@ -98,25 +96,40 @@ export function WorkflowBuilderPage() {
             <CardContent>
               <Typography variant="h3">Rule editor</Typography>
               <Divider sx={{ my: 2 }} />
-              <Stack spacing={2.5}>
-                <TextField label="Rule name" defaultValue="High value invoice approval" />
-                <TextField label="Department" select defaultValue="Finance">
-                  <MenuItem value="Finance">Finance</MenuItem>
-                  <MenuItem value="Operations">Operations</MenuItem>
-                  <MenuItem value="Engineering">Engineering</MenuItem>
+              <Stack
+                component="form"
+                id="workflow-rule-form"
+                spacing={2.5}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  createWorkflow.mutate({
+                    name: String(form.get("name")),
+                    department: String(form.get("department") || "") || undefined,
+                    vendorRiskLevel: (String(form.get("vendorRiskLevel") || "") || undefined) as never,
+                    approverRole: String(form.get("approverRole") || "FINANCE_MANAGER") as never,
+                    thresholdAmount: Number(form.get("thresholdAmount") || 0),
+                    escalationHours: Number(form.get("escalationHours") || 24)
+                  });
+                }}
+              >
+                <TextField name="name" label="Rule name" required defaultValue="Finance approval" />
+                <TextField name="department" label="Department" />
+                <TextField name="vendorRiskLevel" label="Vendor risk" select defaultValue="">
+                  <MenuItem value="">Any risk level</MenuItem>
+                  <MenuItem value="LOW">Low</MenuItem>
+                  <MenuItem value="MEDIUM">Medium</MenuItem>
+                  <MenuItem value="HIGH">High</MenuItem>
+                  <MenuItem value="BLOCKED">Blocked</MenuItem>
                 </TextField>
-                <TextField label="Approver role" select defaultValue="CONTROLLER">
+                <TextField name="approverRole" label="Approver role" select defaultValue="FINANCE_MANAGER">
                   <MenuItem value="FINANCE_MANAGER">Finance Manager</MenuItem>
                   <MenuItem value="CONTROLLER">Controller</MenuItem>
                   <MenuItem value="CFO">CFO</MenuItem>
                 </TextField>
-                <Box>
-                  <Typography fontWeight={700}>Threshold amount</Typography>
-                  <Slider defaultValue={50000} min={0} max={250000} step={5000} valueLabelDisplay="auto" />
-                </Box>
-                <FormControlLabel control={<Checkbox defaultChecked />} label="Allow delegation" />
-                <FormControlLabel control={<Checkbox defaultChecked />} label="Send reminder before escalation" />
-                <FormControlLabel control={<Checkbox />} label="Require CFO when vendor risk is high" />
+                <TextField name="thresholdAmount" label="Threshold amount" type="number" required defaultValue="0" inputProps={{ min: 0, step: "0.01" }} />
+                <TextField name="escalationHours" label="Escalation hours" type="number" required defaultValue="24" inputProps={{ min: 1, step: "1" }} />
+                {createWorkflow.error ? <Typography color="error">{createWorkflow.error.message}</Typography> : null}
               </Stack>
             </CardContent>
           </Card>

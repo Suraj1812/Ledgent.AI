@@ -125,6 +125,15 @@ export const vendorSchema = z.object({
   riskLevel: z.enum(vendorRiskLevels).default("LOW")
 });
 
+export const purchaseOrderLineItemSchema = z.object({
+  sku: z.string().trim().optional(),
+  description: z.string().trim().min(1),
+  quantity: z.coerce.number().positive(),
+  unitPrice: z.coerce.number().nonnegative(),
+  taxRate: z.coerce.number().nonnegative().default(0),
+  totalAmount: z.coerce.number().nonnegative()
+});
+
 export const purchaseOrderSchema = z.object({
   poNumber: z.string().trim().min(2),
   vendorId: z.string().uuid(),
@@ -133,7 +142,8 @@ export const purchaseOrderSchema = z.object({
   totalAmount: z.coerce.number().nonnegative(),
   approvedAmount: z.coerce.number().nonnegative().optional(),
   status: z.enum(poStatuses).default("DRAFT"),
-  expectedDeliveryDate: z.coerce.date().optional()
+  expectedDeliveryDate: z.coerce.date().optional(),
+  lineItems: z.array(purchaseOrderLineItemSchema).optional()
 });
 
 export const invoiceLineItemSchema = z.object({

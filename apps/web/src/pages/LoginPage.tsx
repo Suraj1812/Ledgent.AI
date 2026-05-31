@@ -1,8 +1,6 @@
 import {
   Box,
   Button,
-  Checkbox,
-  FormControlLabel,
   Paper,
   Stack,
   TextField,
@@ -24,11 +22,7 @@ export function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting }
   } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "admin@ledgent.ai",
-      password: "ChangeMe123!"
-    }
+    resolver: zodResolver(loginSchema)
   });
 
   return (
@@ -79,7 +73,6 @@ export function LoginPage() {
               {...register("password")}
             />
             <TextField label="MFA code" autoComplete="one-time-code" {...register("mfaCode")} />
-            <FormControlLabel control={<Checkbox defaultChecked />} label="Keep this device trusted" />
             <Button type="submit" variant="contained" size="large" disabled={isSubmitting}>
               Sign in
             </Button>

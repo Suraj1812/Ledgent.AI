@@ -25,6 +25,7 @@ export type Vendor = {
 export type PurchaseOrder = {
   id: string;
   poNumber: string;
+  vendorId?: string;
   vendorName: string;
   department: string;
   status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED" | "CLOSED";

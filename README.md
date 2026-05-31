@@ -1,6 +1,6 @@
 # Ledgent.AI
 
-Ledgent.AI is a full-stack, AI-first accounts payable automation platform. It covers invoice ingestion, extraction, PO/GRN matching, exception detection, approval routing, ERP posting, audit, reporting, and finance copilot workflows.
+Ledgent.AI is a full-stack accounts payable automation platform. It covers vendor onboarding, purchase orders, invoice intake, PO matching, exception handling, approval routing, audit, reporting, and tenant settings.
 
 ## What Is Included
 
@@ -8,9 +8,9 @@ Ledgent.AI is a full-stack, AI-first accounts payable automation platform. It co
 - NestJS API with authentication, RBAC, audit, vendor, PO, invoice, approval, AI, ERP, notification, and reporting modules
 - Prisma PostgreSQL schema for a multi-tenant AP automation domain
 - Shared Zod contracts and role/permission model
-- Docker Compose for PostgreSQL, Redis, API, and frontend
+- Docker Compose for local PostgreSQL, Redis, API, and frontend
 - GitHub Actions CI workflow
-- AWS ECS deployment plan and production hardening notes
+- Vercel frontend and Railway API/PostgreSQL deployment configuration
 
 ## Quick Start
 
@@ -26,12 +26,10 @@ npm run dev
 
 The frontend runs on `http://localhost:5173` and the API runs on `http://localhost:4000`.
 
-## Demo Credentials
+## Bootstrap Admin
 
-```text
-Email: admin@ledgent.ai
-Password: ChangeMe123!
-```
+The seed script creates the bootstrap admin from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`.
+Set a strong password in production before running `npm run seed`.
 
 ## Workspace Layout
 
@@ -44,13 +42,13 @@ docs            Architecture, security, testing, deployment notes
 
 ## Core Workflows
 
-1. Upload invoices through drag-and-drop or email ingestion.
-2. Run OCR and AI extraction with field-level confidence.
-3. Match invoices against POs and goods receipts.
-4. Detect exceptions and generate suggested resolutions.
-5. Route approvals by threshold, vendor risk, department, and delegation rules.
-6. Post approved invoices or journals into ERP connectors.
-7. Preserve immutable audit history for every action.
+1. Create vendors and manage risk, terms, and supplier balances.
+2. Create purchase orders with line items and approval status.
+3. Create invoices with vendor, PO, amount, tax, dates, and line-item data.
+4. Route invoice approvals by threshold, vendor risk, department, and role.
+5. Approve, reject, or request changes from the approval queue.
+6. Export live finance data from dashboard, reports, vendors, POs, invoices, and audit views.
+7. Preserve audit history for login, workflow, invoice, approval, and vendor actions.
 
 ## API Documentation
 
@@ -62,4 +60,4 @@ http://localhost:4000/docs
 
 ## Production Notes
 
-Use the included Dockerfiles and `docs/production-deployment-plan.md` as the baseline for AWS ECS. The API is stateless, documents belong in S3, background jobs run through BullMQ and Redis, and tenant isolation is enforced through `organizationId` filters and RBAC guards.
+Use `vercel.json` for the frontend and `railway.json` plus `apps/api/Dockerfile` for the API. The API is stateless, the database is PostgreSQL, and tenant isolation is enforced through `organizationId` filters and RBAC guards.

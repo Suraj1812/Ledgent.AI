@@ -1,5 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { hash } from "bcryptjs";
+import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -31,7 +32,14 @@ export class UsersService {
     lastName: string;
     role: "SUPER_ADMIN" | "FINANCE_ADMIN" | "AP_ACCOUNTANT" | "FINANCE_MANAGER" | "CONTROLLER" | "CFO" | "AUDITOR" | "READ_ONLY";
     permissions?: string[];
+    password?: string;
   }) {
+    const password = body.password ?? randomBytes(18).toString("base64url");
+
+    if (password.length < 12) {
+      throw new BadRequestException("Temporary password must be at least 12 characters");
+    }
+
     return this.prisma.user.create({
       data: {
         organizationId,
@@ -40,7 +48,7 @@ export class UsersService {
         lastName: body.lastName,
         role: body.role,
         permissions: body.permissions ?? [],
-        passwordHash: await hash("ChangeMe123!", 12)
+        passwordHash: await hash(password, 12)
       },
       select: {
         id: true,

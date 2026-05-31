@@ -1,4 +1,11 @@
-import type { LoginInput, VendorInput } from "@ledgent/contracts";
+import type {
+  ApprovalDecisionInput,
+  InvoiceInput,
+  LoginInput,
+  PurchaseOrderInput,
+  VendorInput,
+  WorkflowRuleInput
+} from "@ledgent/contracts";
 import type { ApprovalTask, AuditEvent, AuthUser, Invoice, PurchaseOrder, Vendor } from "../types/domain";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -236,12 +243,18 @@ export const api = {
         ...values
       })
     }),
+  createPurchaseOrder: (values: PurchaseOrderInput) =>
+    request("/purchase-orders", {
+      method: "POST",
+      body: JSON.stringify(values)
+    }),
   async purchaseOrders() {
     const response = await request<Paginated<any>>("/purchase-orders?pageSize=100");
     return response.items.map(
       (record): PurchaseOrder => ({
         id: record.id,
         poNumber: record.poNumber,
+        vendorId: record.vendorId,
         vendorName: record.vendor?.name ?? "Unknown vendor",
         department: record.department,
         status: record.status,
@@ -260,6 +273,11 @@ export const api = {
     const response = await request<Paginated<any>>("/invoices?pageSize=100");
     return response.items.map(mapInvoice);
   },
+  createInvoice: (values: InvoiceInput) =>
+    request("/invoices", {
+      method: "POST",
+      body: JSON.stringify(values)
+    }),
   async invoice(id: string) {
     return mapInvoice(await request<any>(`/invoices/${id}`));
   },
@@ -278,7 +296,17 @@ export const api = {
       })
     );
   },
+  decideApproval: (taskId: string, decision: ApprovalDecisionInput) =>
+    request(`/approvals/tasks/${taskId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(decision)
+    }),
   workflows: () => request<any[]>("/approvals/workflows"),
+  createWorkflow: (values: WorkflowRuleInput) =>
+    request("/approvals/workflows", {
+      method: "POST",
+      body: JSON.stringify(values)
+    }),
   async auditEvents() {
     const response = await request<Paginated<any>>("/audit-logs?pageSize=100");
     return response.items.map(
@@ -296,6 +324,29 @@ export const api = {
   async users() {
     return request<any[]>("/users");
   },
+  createUser: (values: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    permissions?: string[];
+    password?: string;
+  }) =>
+    request("/users", {
+      method: "POST",
+      body: JSON.stringify(values)
+    }),
+  updateUserStatus: (id: string, isActive: boolean) =>
+    request(`/users/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ isActive })
+    }),
+  organization: () => request<any>("/organizations/current"),
+  updateSettings: (settings: Record<string, unknown>) =>
+    request("/organizations/current/settings", {
+      method: "PATCH",
+      body: JSON.stringify(settings)
+    }),
   async reports() {
     const [spendTrend, invoices, vendors] = await Promise.all([api.request<any[]>("/reports/spend"), api.invoices(), api.vendors()]);
     return {

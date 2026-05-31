@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import type { ReactNode } from "react";
 
 type PageHeaderProps = {
@@ -25,16 +25,6 @@ export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
         ) : null}
       </Box>
       {action ? <Box>{action}</Box> : null}
-    </Stack>
-  );
-}
-
-export function ExportActions() {
-  return (
-    <Stack direction="row" spacing={1}>
-      <Button variant="outlined">CSV</Button>
-      <Button variant="outlined">Excel</Button>
-      <Button variant="contained">PDF</Button>
     </Stack>
   );
 }
